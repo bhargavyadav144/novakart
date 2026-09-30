@@ -9,6 +9,8 @@ import {
   approveDeliveryAgent,
   rejectDeliveryAgent,
   toggleBlockDeliveryAgent,
+  approveAgentBankUpdate,
+  creditRiderWallet,
   getAllCustomers,
   toggleBlockCustomer,
   toggleProductStatus
@@ -30,11 +32,13 @@ router.put('/sellers/:id/approve', approveSeller);
 router.put('/sellers/:id/reject', rejectSeller);
 router.put('/sellers/:id/block', toggleBlockSeller);
 
-// Delivery Agent Moderation
+// Delivery Agent Moderation & Wallet Operations
 router.get('/delivery-agents', getAllDeliveryAgents);
 router.put('/delivery-agents/:id/approve', approveDeliveryAgent);
 router.put('/delivery-agents/:id/reject', rejectDeliveryAgent);
 router.put('/delivery-agents/:id/block', toggleBlockDeliveryAgent);
+router.put('/delivery-agents/:id/bank-update', approveAgentBankUpdate);
+router.post('/credit-rider-wallet', creditRiderWallet);
 
 // Customer Management
 router.get('/customers', getAllCustomers);

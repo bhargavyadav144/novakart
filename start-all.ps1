@@ -27,13 +27,21 @@ Start-Process "$PSHOME\powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass
 Write-Host "6. Starting Warehouse Hub Logistics (Port 3004)..." -ForegroundColor Yellow
 Start-Process "$PSHOME\powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = 'Warehouse Hub Logistics (Port 3004)'; cd '$root\warehouse-frontend'; npm run dev"
 
+Write-Host "7. Starting Digital Payments & Treasury (Port 3005)..." -ForegroundColor Yellow
+Start-Process "$PSHOME\powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = 'Digital Payments & Treasury (Port 3005)'; cd '$root\payments-frontend'; npm run dev"
+
+Write-Host "8. Starting Help Center Resolution Desk (Port 3006)..." -ForegroundColor Yellow
+Start-Process "$PSHOME\powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = 'Help Center Resolution Desk (Port 3006)'; cd '$root\support-frontend'; npm run dev"
+
 Write-Host ""
 Write-Host "=========================================================================" -ForegroundColor Cyan
-Write-Host "  ✅ All 5 Frontend Portals and Unified Backend are running!" -ForegroundColor Green
+Write-Host "  ✅ All 7 Frontend Portals and Unified Backend are running!" -ForegroundColor Green
 Write-Host "  - Customer Portal:        http://localhost:3000" -ForegroundColor White
 Write-Host "  - Seller Portal:          http://localhost:3001" -ForegroundColor White
 Write-Host "  - Delivery Agent Portal:  http://localhost:3002" -ForegroundColor White
 Write-Host "  - Admin Portal:           http://localhost:3003" -ForegroundColor White
 Write-Host "  - Warehouse Hub:          http://localhost:3004" -ForegroundColor White
+Write-Host "  - Payments Treasury:      http://localhost:3005" -ForegroundColor White
+Write-Host "  - Support Resolution:     http://localhost:3006" -ForegroundColor White
 Write-Host "  - Unified Backend API:    http://localhost:5050" -ForegroundColor White
 Write-Host "=========================================================================" -ForegroundColor Cyan

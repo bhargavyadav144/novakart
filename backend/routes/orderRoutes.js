@@ -10,6 +10,10 @@ import {
   getDeliveryRadarRequests,
   acceptDeliveryRequest,
   updateDeliveryStatus,
+  resendDeliveryOtp,
+  requestDoorstepReturnOtp,
+  confirmDoorstepReturn,
+  markCustomerUnreachable,
   getAdminAllOrders
 } from '../controllers/orderController.js';
 import { authenticateUser } from '../middleware/authMiddleware.js';
@@ -18,10 +22,10 @@ import { ROLES } from '../config/constants.js';
 
 const router = express.Router();
 
-// Customer Endpoints
-router.post('/place', authenticateUser, authorizeRoles(ROLES.CUSTOMER), placeOrder);
-router.get('/my-orders', authenticateUser, authorizeRoles(ROLES.CUSTOMER), getCustomerOrders);
-router.put('/:id/cancel', authenticateUser, authorizeRoles(ROLES.CUSTOMER), cancelCustomerOrder);
+// Customer & General Endpoints
+router.post('/place', authenticateUser, placeOrder);
+router.get('/my-orders', authenticateUser, getCustomerOrders);
+router.put('/:id/cancel', authenticateUser, cancelCustomerOrder);
 
 // Seller Endpoints
 router.get('/seller/incoming', authenticateUser, authorizeRoles(ROLES.SELLER), getSellerOrders);
@@ -32,6 +36,10 @@ router.put('/seller/:id/reject', authenticateUser, authorizeRoles(ROLES.SELLER),
 router.get('/delivery/radar-requests', authenticateUser, authorizeRoles(ROLES.DELIVERY), getDeliveryRadarRequests);
 router.put('/delivery/requests/:requestId/accept', authenticateUser, authorizeRoles(ROLES.DELIVERY), acceptDeliveryRequest);
 router.put('/delivery/:id/update-status', authenticateUser, authorizeRoles(ROLES.DELIVERY), updateDeliveryStatus);
+router.post('/delivery/:id/resend-otp', authenticateUser, authorizeRoles(ROLES.DELIVERY), resendDeliveryOtp);
+router.post('/delivery/:id/request-doorstep-return-otp', authenticateUser, authorizeRoles(ROLES.DELIVERY), requestDoorstepReturnOtp);
+router.post('/delivery/:id/confirm-doorstep-return', authenticateUser, authorizeRoles(ROLES.DELIVERY), confirmDoorstepReturn);
+router.post('/delivery/:id/customer-unreachable', authenticateUser, authorizeRoles(ROLES.DELIVERY), markCustomerUnreachable);
 
 // Admin Monitoring Endpoints
 router.get('/admin/all', authenticateUser, authorizeRoles(ROLES.ADMIN), getAdminAllOrders);

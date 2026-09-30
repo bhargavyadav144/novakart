@@ -5,7 +5,8 @@ import MobileAppLayout from './components/MobileAppLayout';
 
 // Pages
 import DutyDashboard from './pages/DutyDashboard';
-import ActiveDeliveryPage from './pages/ActiveDeliveryPage';
+import DeliveryOrdersListPage from './pages/DeliveryOrdersListPage';
+import LiveTrackingMapPage from './pages/LiveTrackingMapPage';
 import DeliveryHistoryPage from './pages/DeliveryHistoryPage';
 import EarningsPage from './pages/EarningsPage';
 import AgentLogin from './pages/AgentLogin';
@@ -61,8 +62,15 @@ export default function App() {
           <Route path="/login" element={<MobileAuthWrapper><AgentLogin /></MobileAuthWrapper>} />
           <Route path="/register" element={<MobileAuthWrapper><AgentRegister /></MobileAuthWrapper>} />
 
-          <Route path="/" element={<ProtectedDeliveryLayout><DutyDashboard /></ProtectedDeliveryLayout>} />
-          <Route path="/active" element={<ProtectedDeliveryLayout><ActiveDeliveryPage /></ProtectedDeliveryLayout>} />
+          {/* First 2 Nav Buttons: 1 is Orders, 1 is Live Map & Submit Order */}
+          <Route path="/" element={<Navigate to="/orders" replace />} />
+          <Route path="/orders" element={<ProtectedDeliveryLayout><DeliveryOrdersListPage /></ProtectedDeliveryLayout>} />
+          <Route path="/map" element={<ProtectedDeliveryLayout><LiveTrackingMapPage /></ProtectedDeliveryLayout>} />
+          <Route path="/tracking" element={<Navigate to="/map" replace />} />
+          <Route path="/active" element={<Navigate to="/orders" replace />} />
+
+          {/* Secondary Pages */}
+          <Route path="/duty" element={<ProtectedDeliveryLayout><DutyDashboard /></ProtectedDeliveryLayout>} />
           <Route path="/history" element={<ProtectedDeliveryLayout><DeliveryHistoryPage /></ProtectedDeliveryLayout>} />
           <Route path="/earnings" element={<ProtectedDeliveryLayout><EarningsPage /></ProtectedDeliveryLayout>} />
           <Route path="/profile" element={<ProtectedDeliveryLayout><RiderProfilePage /></ProtectedDeliveryLayout>} />

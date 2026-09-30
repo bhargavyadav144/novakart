@@ -21,6 +21,8 @@ export default function AdminSidebar() {
         <NavLink to="/products"><i className="fa-solid fa-boxes-stacked"></i> Catalog Moderation</NavLink>
         <NavLink to="/orders"><i className="fa-solid fa-receipt"></i> Global Orders Monitor</NavLink>
         <NavLink to="/warehouses"><i className="fa-solid fa-warehouse"></i> Warehouses &amp; Hubs</NavLink>
+        <NavLink to="/returns"><i className="fa-solid fa-rotate-left"></i> Return &amp; Refund Pipeline</NavLink>
+        <NavLink to="/help-center"><i className="fa-solid fa-headset"></i> Help Center Support Squad</NavLink>
         <a 
           href="http://localhost:3005" 
           target="_blank" 
@@ -35,6 +37,22 @@ export default function AdminSidebar() {
         >
           <i className="fa-solid fa-vault"></i> 
           <span>Payments &amp; Treasury (3005)</span>
+          <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '0.72rem', marginLeft: 'auto' }}></i>
+        </a>
+        <a 
+          href="http://localhost:3006" 
+          target="_blank" 
+          rel="noreferrer"
+          style={{
+            marginTop: '6px',
+            background: 'rgba(6, 182, 212, 0.12)',
+            color: '#22D3EE',
+            border: '1px solid rgba(6, 182, 212, 0.25)',
+            fontWeight: '700'
+          }}
+        >
+          <i className="fa-solid fa-headset"></i> 
+          <span>Help Center Desk (3006)</span>
           <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '0.72rem', marginLeft: 'auto' }}></i>
         </a>
       </nav>

@@ -18,7 +18,12 @@ const generateUTR = () => {
 // @access  Private (Finance, Admin)
 export const getTreasuryOverview = async (req, res, next) => {
   try {
-    const transactions = await PaymentTransaction.find().sort({ createdAt: -1 });
+    const transactions = await PaymentTransaction.find()
+      .populate({
+        path: 'orderId',
+        select: 'orderNumber items deliveryAddress totalAmount paymentStatus orderStatus'
+      })
+      .sort({ createdAt: -1 });
 
     let totalInboundReceived = 0;
     let totalOutboundDisbursed = 0;
@@ -101,6 +106,10 @@ export const getAllTransactions = async (req, res, next) => {
 
     const total = await PaymentTransaction.countDocuments(query);
     const transactions = await PaymentTransaction.find(query)
+      .populate({
+        path: 'orderId',
+        select: 'orderNumber items deliveryAddress totalAmount paymentStatus orderStatus'
+      })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));

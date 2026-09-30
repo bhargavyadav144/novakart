@@ -7,9 +7,10 @@ import api, { formatINR } from '../services/api';
 
 export default function CheckoutPage() {
   const { cart, subtotal, tax, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { isPhone } = useDeviceMode();
   const navigate = useNavigate();
+
 
   // Multi-address book states
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -53,41 +54,93 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('Cash on Delivery (COD)');
   const [loading, setLoading] = useState(false);
 
-  // Address parser (loads array of saved addresses)
+  // Real-time Pincode Delivery Availability Checker
+  const [pincodeCheckResult, setPincodeCheckResult] = useState(null);
+  const [pincodeCheckLoading, setPincodeCheckLoading] = useState(false);
+
   useEffect(() => {
-    if (user?.address) {
+    let targetPin = '';
+    let targetCity = '';
+    if (!isEditingAddress && savedAddresses[selectedAddressIndex]) {
+      const addr = savedAddresses[selectedAddressIndex];
+      targetPin = addr.pincode || addr.postalCode || '';
+      targetCity = addr.city || '';
+    } else {
+      targetPin = postalCode;
+      targetCity = city;
+    }
+
+    const cleanPin = String(targetPin || '').trim();
+    if (cleanPin.length >= 5) {
+      setPincodeCheckLoading(true);
+      api.get('/warehouses/check-serviceability', {
+        params: { pincode: cleanPin, city: String(targetCity || '').trim() }
+      })
+      .then(res => {
+        setPincodeCheckResult(res.data);
+      })
+      .catch(() => {
+        setPincodeCheckResult({
+          success: false,
+          isServiceable: false,
+          status: 'error',
+          message: 'Error verifying pincode delivery serviceability.'
+        });
+      })
+      .finally(() => {
+        setPincodeCheckLoading(false);
+      });
+    } else {
+      setPincodeCheckResult(null);
+    }
+  }, [selectedAddressIndex, savedAddresses, isEditingAddress, postalCode, city]);
+
+  // Address parser (loads array of saved addresses with localStorage fallback)
+  useEffect(() => {
+    let loaded = [];
+    let profileHasAddress = false;
+
+    if (user?.address !== undefined && user?.address !== null && user?.address !== '') {
+      profileHasAddress = true;
       try {
         const parsed = JSON.parse(user.address);
         if (Array.isArray(parsed)) {
-          setSavedAddresses(parsed);
-          setIsEditingAddress(parsed.length === 0);
+          loaded = parsed;
         } else if (parsed && typeof parsed === 'object') {
-          setSavedAddresses([parsed]);
-          setIsEditingAddress(false);
-        } else {
-          setSavedAddresses([]);
-          setIsEditingAddress(true);
+          loaded = [parsed];
         }
       } catch {
-        // Fallback for raw text address
-        const fallback = {
-          recipientName: user.name || '',
-          recipientPhone: user.phone || '',
-          houseNo: '',
-          street: user.address,
-          landmark: '',
-          city: '',
-          state: '',
-          pincode: ''
-        };
-        setSavedAddresses([fallback]);
-        setIsEditingAddress(false);
+        if (typeof user.address === 'string' && user.address.length > 3) {
+          loaded = [{
+            recipientName: user.name || '',
+            recipientPhone: user.phone || '',
+            houseNo: '',
+            street: user.address,
+            landmark: '',
+            city: '',
+            state: '',
+            pincode: ''
+          }];
+        }
       }
-    } else {
-      setSavedAddresses([]);
-      setIsEditingAddress(true);
     }
+
+    if (!profileHasAddress && loaded.length === 0) {
+      const cached = localStorage.getItem('novakart_checkout_saved_addresses');
+      if (cached) {
+        try {
+          const parsedCache = JSON.parse(cached);
+          if (Array.isArray(parsedCache)) {
+            loaded = parsedCache;
+          }
+        } catch (e) {}
+      }
+    }
+
+    setSavedAddresses(loaded);
+    setIsEditingAddress(loaded.length === 0);
   }, [user?.address]);
+
 
   // Check first order eligibility by fetching order count
   useEffect(() => {
@@ -102,6 +155,66 @@ export default function CheckoutPage() {
         });
     }
   }, [user]);
+
+  // Restore applied gift card and coupon from sessionStorage or pending_order_payload
+  useEffect(() => {
+    // 1. Gift Card restoration
+    const savedGc = sessionStorage.getItem('novakart_applied_gift_card');
+    if (savedGc) {
+      try {
+        const parsed = JSON.parse(savedGc);
+        if (parsed && parsed.code) {
+          setAppliedGiftCard(parsed);
+        }
+      } catch (e) {}
+    } else {
+      const pendingStr = localStorage.getItem('pending_order_payload');
+      if (pendingStr) {
+        try {
+          const pending = JSON.parse(pendingStr);
+          if (pending.appliedGiftCard) {
+            setAppliedGiftCard(pending.appliedGiftCard);
+            sessionStorage.setItem('novakart_applied_gift_card', JSON.stringify(pending.appliedGiftCard));
+          } else if (pending.giftCardCode) {
+            api.post('/gift-cards/apply', { code: pending.giftCardCode })
+              .then(({ data }) => {
+                if (data.success) {
+                  setAppliedGiftCard(data.card);
+                  sessionStorage.setItem('novakart_applied_gift_card', JSON.stringify(data.card));
+                }
+              })
+              .catch(() => {});
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Coupon restoration
+    const savedCoupon = sessionStorage.getItem('novakart_applied_coupon');
+    const pendingStr = localStorage.getItem('pending_order_payload');
+    let couponToRestore = savedCoupon;
+
+    if (!couponToRestore && pendingStr) {
+      try {
+        const pending = JSON.parse(pendingStr);
+        if (pending.promoCode) {
+          couponToRestore = pending.promoCode;
+        }
+      } catch (e) {}
+    }
+
+    if (couponToRestore) {
+      setSelectedOfferCode(couponToRestore);
+      if (couponToRestore === 'NOVAKART20') {
+        setPromoDiscount(50);
+      } else if (couponToRestore === 'SUPER200') {
+        if (subtotal >= 2000) setPromoDiscount(200);
+      } else if (couponToRestore === 'FESTIVE100') {
+        if (subtotal >= 1200) setPromoDiscount(100);
+      }
+      sessionStorage.setItem('novakart_applied_coupon', couponToRestore);
+    }
+  }, [subtotal]);
 
   // Inject Leaflet CSS & JS dynamically
   useEffect(() => {
@@ -128,10 +241,13 @@ export default function CheckoutPage() {
   const leafletMapInstance = useRef(null);
   const markerInstance = useRef(null);
 
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [searchingLocation, setSearchingLocation] = useState(false);
+
   useEffect(() => {
     if (showMapModal && mapLoaded && mapRef.current) {
       const timer = setTimeout(() => {
-        const defaultCoords = [17.3850, 78.4867]; // Hyderabad, India
+        const defaultCoords = [16.3067, 80.4365]; // Local AP / Guntur region default
         const initialCoords = pinnedCoords || defaultCoords;
 
         if (leafletMapInstance.current) {
@@ -176,6 +292,22 @@ export default function CheckoutPage() {
 
         performReverseGeocode({ lat: initialCoords[0], lng: initialCoords[1] });
 
+        // Auto-locate GPS on map open if pinnedCoords was not previously set
+        if (!pinnedCoords && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const deviceLat = pos.coords.latitude;
+              const deviceLng = pos.coords.longitude;
+              map.setView([deviceLat, deviceLng], 15);
+              marker.setLatLng([deviceLat, deviceLng]);
+              setPinnedCoords([deviceLat, deviceLng]);
+              performReverseGeocode({ lat: deviceLat, lng: deviceLng });
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 6000 }
+          );
+        }
+
         marker.on('dragend', () => {
           const latLng = marker.getLatLng();
           setPinnedCoords([latLng.lat, latLng.lng]);
@@ -192,7 +324,37 @@ export default function CheckoutPage() {
 
       return () => clearTimeout(timer);
     }
-  }, [showMapModal, mapLoaded, pinnedCoords]);
+  }, [showMapModal, mapLoaded]);
+
+  const handleSearchLocationOnMap = async () => {
+    if (!mapSearchQuery.trim()) return;
+    setSearchingLocation(true);
+    try {
+      const q = mapSearchQuery.trim();
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Andhra Pradesh, India')}&limit=1`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const targetLat = parseFloat(data[0].lat);
+        const targetLng = parseFloat(data[0].lon);
+        setPinnedCoords([targetLat, targetLng]);
+        setMapSelectedAddress(data[0].display_name);
+        if (leafletMapInstance.current) {
+          leafletMapInstance.current.setView([targetLat, targetLng], 15);
+        }
+        if (markerInstance.current) {
+          markerInstance.current.setLatLng([targetLat, targetLng]);
+        }
+      } else {
+        alert(`Location "${mapSearchQuery}" not found. Try searching with Pincode or Village name.`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error searching location');
+    } finally {
+      setSearchingLocation(false);
+    }
+  };
+
 
   const handleConfirmMapLocation = () => {
     if (!pinnedCoords) return;
@@ -314,15 +476,16 @@ export default function CheckoutPage() {
       setSelectedAddressIndex(selectedAddressIndex - 1);
     }
 
+    localStorage.setItem('novakart_checkout_saved_addresses', JSON.stringify(updated));
     try {
-      await api.put('/auth/profile', {
-        name: user.name,
-        phone: user.phone,
-        avatar: user.avatar,
+      await updateProfile({
+        name: user?.name,
+        phone: user?.phone,
+        avatar: user?.avatar,
         address: JSON.stringify(updated)
       });
     } catch (err) {
-      console.error('Failed to update address array in MongoDB:', err);
+      console.error('Failed to update address array:', err);
     }
   };
 
@@ -355,21 +518,23 @@ export default function CheckoutPage() {
     setSavedAddresses(updatedList);
     setIsEditingAddress(false);
     setEditIndex(null);
+    setSelectedAddressIndex(editIndex !== null ? editIndex : updatedList.length - 1);
 
-    // Save list array to profile
-    if (saveToProfile) {
-      try {
-        await api.put('/auth/profile', {
-          name: user.name,
-          phone: user.phone,
-          avatar: user.avatar,
-          address: JSON.stringify(updatedList)
-        });
-      } catch (err) {
-        console.error('Failed to save updated address list to profile database:', err);
-      }
+    localStorage.setItem('novakart_checkout_saved_addresses', JSON.stringify(updatedList));
+
+    // Synchronize to profile in backend database & AuthContext state
+    try {
+      await updateProfile({
+        name: user?.name,
+        phone: user?.phone,
+        avatar: user?.avatar,
+        address: JSON.stringify(updatedList)
+      });
+    } catch (err) {
+      console.error('Failed to save updated address list to profile database:', err);
     }
   };
+
 
   const handleApplyGiftCard = async () => {
     setGiftCardError('');
@@ -381,6 +546,7 @@ export default function CheckoutPage() {
       const { data } = await api.post('/gift-cards/apply', { code: giftCardCodeInput });
       if (data.success) {
         setAppliedGiftCard(data.card);
+        sessionStorage.setItem('novakart_applied_gift_card', JSON.stringify(data.card));
         setGiftCardCodeInput('');
       }
     } catch (err) {
@@ -390,6 +556,16 @@ export default function CheckoutPage() {
 
   const handleRemoveGiftCard = () => {
     setAppliedGiftCard(null);
+    sessionStorage.removeItem('novakart_applied_gift_card');
+    const pendingStr = localStorage.getItem('pending_order_payload');
+    if (pendingStr) {
+      try {
+        const pending = JSON.parse(pendingStr);
+        delete pending.giftCardCode;
+        delete pending.appliedGiftCard;
+        localStorage.setItem('pending_order_payload', JSON.stringify(pending));
+      } catch (e) {}
+    }
   };
 
   // Handle Offer Select
@@ -399,6 +575,16 @@ export default function CheckoutPage() {
 
     if (!offerCode) {
       setPromoDiscount(0);
+      sessionStorage.removeItem('novakart_applied_coupon');
+      const pendingStr = localStorage.getItem('pending_order_payload');
+      if (pendingStr) {
+        try {
+          const pending = JSON.parse(pendingStr);
+          delete pending.promoCode;
+          delete pending.promoDiscount;
+          localStorage.setItem('pending_order_payload', JSON.stringify(pending));
+        } catch (e) {}
+      }
       return;
     }
 
@@ -407,24 +593,30 @@ export default function CheckoutPage() {
         setOfferError('This promo code is only valid for your first order.');
         setPromoDiscount(0);
         setSelectedOfferCode('');
+        sessionStorage.removeItem('novakart_applied_coupon');
       } else {
         setPromoDiscount(50);
+        sessionStorage.setItem('novakart_applied_coupon', offerCode);
       }
     } else if (offerCode === 'SUPER200') {
       if (subtotal < 2000) {
         setOfferError(`Add ${formatINR(2000 - subtotal)} more to unlock SUPER200!`);
         setPromoDiscount(0);
         setSelectedOfferCode('');
+        sessionStorage.removeItem('novakart_applied_coupon');
       } else {
         setPromoDiscount(200);
+        sessionStorage.setItem('novakart_applied_coupon', offerCode);
       }
     } else if (offerCode === 'FESTIVE100') {
       if (subtotal < 1200) {
         setOfferError(`Add ${formatINR(1200 - subtotal)} more to unlock FESTIVE100!`);
         setPromoDiscount(0);
         setSelectedOfferCode('');
+        sessionStorage.removeItem('novakart_applied_coupon');
       } else {
         setPromoDiscount(100);
+        sessionStorage.setItem('novakart_applied_coupon', offerCode);
       }
     }
   };
@@ -453,13 +645,30 @@ export default function CheckoutPage() {
       return;
     }
 
-    const activeAddress = savedAddresses[selectedAddressIndex];
-    if (!activeAddress) {
-      alert('Please select a shipping address card.');
-      return;
-    }
+    const activeAddress = savedAddresses[selectedAddressIndex] || {
+      recipientName: fullName,
+      recipientPhone: phone,
+      houseNo,
+      street,
+      landmark,
+      city,
+      state,
+      pincode: postalCode,
+      postalCode,
+      coordinates
+    };
 
-    const combinedStreet = [activeAddress.houseNo, activeAddress.street, activeAddress.landmark].filter(Boolean).join(', ');
+    const cleanPin = String(activeAddress.pincode || activeAddress.postalCode || postalCode || user?.pincode || '522001').trim();
+    const cleanCity = String(activeAddress.city || city || user?.city || 'Guntur').trim();
+    const cleanState = String(activeAddress.state || state || user?.state || 'Andhra Pradesh').trim();
+    const cleanName = String(activeAddress.recipientName || activeAddress.fullName || activeAddress.name || user?.name || 'Customer').trim();
+    const cleanPhone = String(activeAddress.recipientPhone || activeAddress.phone || user?.phone || '9876543210').trim();
+
+    const combinedStreet = [
+      activeAddress.houseNo,
+      activeAddress.street || activeAddress.address,
+      activeAddress.landmark
+    ].filter(Boolean).join(', ') || cleanCity || 'Main Doorstep Address';
 
     const orderPayload = {
       items: cart.map(i => ({
@@ -471,31 +680,54 @@ export default function CheckoutPage() {
         image: i.image
       })),
       deliveryAddress: {
-        fullName: activeAddress.recipientName,
-        phone: activeAddress.recipientPhone,
+        fullName: cleanName,
+        phone: cleanPhone,
         street: combinedStreet,
-        city: activeAddress.city,
-        state: activeAddress.state,
-        postalCode: activeAddress.pincode,
+        city: cleanCity,
+        state: cleanState,
+        pincode: cleanPin,
+        postalCode: cleanPin,
         coordinates: activeAddress.coordinates || coordinates
       },
       paymentMethod,
       giftCardCode: appliedGiftCard?.code || undefined,
-      promoCode: selectedOfferCode || undefined
+      appliedGiftCard: appliedGiftCard || undefined,
+      promoCode: selectedOfferCode || undefined,
+      promoDiscount: promoDiscount || undefined
     };
 
-    if (paymentMethod === 'Online Payment (Credit/Debit/UPI)') {
-      // Redirect to mock payment gateway
-      localStorage.setItem('pending_order_payload', JSON.stringify(orderPayload));
-      navigate('/checkout/payment');
-      return;
-    }
-
-    // Direct Cash on Delivery placement (with COD Convenience Fee)
     setLoading(true);
     try {
+      // Check local warehouse serviceability & maintenance status
+      const serviceRes = await api.get('/warehouses/check-serviceability', {
+        params: {
+          pincode: cleanPin,
+          city: cleanCity,
+          lat: activeAddress.coordinates?.lat || coordinates.lat,
+          lng: activeAddress.coordinates?.lng || coordinates.lng
+        }
+      });
+
+      if (serviceRes.data && !serviceRes.data.isServiceable) {
+        alert(serviceRes.data.message || '❌ No delivery service available in this area. The local warehouse hub covering your address is currently under maintenance. Please try again later or select another address.');
+        setLoading(false);
+        return;
+      }
+
+      if (paymentMethod === 'Online Payment (Credit/Debit/UPI)') {
+        // Redirect to mock payment gateway
+        localStorage.setItem('pending_order_payload', JSON.stringify(orderPayload));
+        setLoading(false);
+        navigate('/checkout/payment');
+        return;
+      }
+
+      // Direct Cash on Delivery placement (with COD Convenience Fee)
       const { data } = await api.post('/orders/place', orderPayload);
       clearCart();
+      sessionStorage.removeItem('novakart_applied_gift_card');
+      sessionStorage.removeItem('novakart_applied_coupon');
+      localStorage.removeItem('pending_order_payload');
       alert(`🎉 Order placed successfully! Order ID: ${data.order.orderNumber}`);
       navigate(`/orders/${data.order._id}/track`);
     } catch (err) {
@@ -617,6 +849,26 @@ export default function CheckoutPage() {
                           <p style={{ fontSize: isPhone ? '0.78rem' : '0.85rem', color: '#64748b', lineHeight: '1.4', margin: 0, wordBreak: 'break-word' }}>
                             {addressParts.join(', ')}
                           </p>
+
+                          {/* Live Pincode Serviceability Badge */}
+                          {selectedAddressIndex === idx && pincodeCheckResult && (
+                            <div style={{
+                              marginTop: '8px',
+                              fontSize: '0.75rem',
+                              fontWeight: '700',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: pincodeCheckResult.isServiceable ? '#f0fdf4' : (pincodeCheckResult.status === 'maintenance' ? '#fffbe6' : '#fef2f2'),
+                              color: pincodeCheckResult.isServiceable ? '#166534' : (pincodeCheckResult.status === 'maintenance' ? '#b45309' : '#991b1b'),
+                              border: `1px solid ${pincodeCheckResult.isServiceable ? '#bbf7d0' : (pincodeCheckResult.status === 'maintenance' ? '#ffe58f' : '#fecaca')}`
+                            }}>
+                              <i className={pincodeCheckResult.isServiceable ? "fa-solid fa-circle-check" : "fa-solid fa-circle-xmark"}></i>
+                              {pincodeCheckResult.message}
+                            </div>
+                          )}
                         </div>
                       </div>
                       
@@ -894,14 +1146,46 @@ export default function CheckoutPage() {
               <span>{formatINR(payableTotal)}</span>
             </div>
 
+            {/* Pincode Serviceability Alert Banner */}
+            {pincodeCheckResult && !pincodeCheckResult.isServiceable && (
+              <div style={{
+                marginTop: '12px',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: pincodeCheckResult.status === 'maintenance' ? '#fffbe6' : '#fef2f2',
+                color: pincodeCheckResult.status === 'maintenance' ? '#b45309' : '#991b1b',
+                border: `1px solid ${pincodeCheckResult.status === 'maintenance' ? '#ffe58f' : '#fecaca'}`,
+                fontSize: '0.82rem',
+                fontWeight: '700',
+                lineHeight: '1.4'
+              }}>
+                <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: '6px' }}></i>
+                {pincodeCheckResult.message}
+              </div>
+            )}
+
             <button 
               type="button" 
               onClick={handlePlaceOrder}
               className="btn btn-primary" 
-              style={{ width: '100%', padding: '14px', fontSize: '1rem', marginTop: '16px', fontWeight: '700' }} 
-              disabled={loading || isEditingAddress}
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: '1rem',
+                marginTop: '16px',
+                fontWeight: '700',
+                background: (pincodeCheckResult && !pincodeCheckResult.isServiceable) ? '#94a3b8' : 'var(--secondary-color)',
+                borderColor: (pincodeCheckResult && !pincodeCheckResult.isServiceable) ? '#94a3b8' : 'var(--secondary-color)'
+              }} 
+              disabled={loading || isEditingAddress || (pincodeCheckResult && !pincodeCheckResult.isServiceable)}
             >
-              {isEditingAddress ? 'Please Save Address Details First' : loading ? 'Placing Order...' : `Confirm Order (${formatINR(payableTotal)})`}
+              {isEditingAddress 
+                ? 'Please Save Address Details First' 
+                : (pincodeCheckResult && !pincodeCheckResult.isServiceable)
+                  ? 'Delivery Unavailable for Pincode'
+                  : loading 
+                    ? 'Placing Order...' 
+                    : `Confirm Order (${formatINR(payableTotal)})`}
             </button>
           </div>
         </aside>
@@ -923,12 +1207,33 @@ export default function CheckoutPage() {
               </button>
             </div>
 
+            {/* Village / Pincode Location Search Bar */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                placeholder="Search Village, Mandal or Pincode (e.g. Narakoduru, 522213)"
+                value={mapSearchQuery}
+                onChange={(e) => setMapSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchLocationOnMap(); } }}
+                style={{ flex: 1, padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.82rem', background: '#F8FAFC' }}
+              />
+              <button
+                type="button"
+                onClick={handleSearchLocationOnMap}
+                disabled={searchingLocation}
+                style={{ background: '#2563EB', color: '#FFF', border: 'none', padding: '8px 14px', borderRadius: '8px', fontWeight: '700', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <i className={searchingLocation ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-magnifying-glass"}></i> Search
+              </button>
+            </div>
+
             {/* Map Canvas */}
             <div 
               ref={mapRef} 
               id="profile-map" 
-              style={{ width: '100%', height: '320px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#f8fafc', position: 'relative' }}
+              style={{ width: '100%', height: '300px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#f8fafc', position: 'relative' }}
             >
+
               {!mapLoaded && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                   <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '1.5rem', color: 'var(--secondary-color)' }}></i>

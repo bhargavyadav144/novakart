@@ -3,6 +3,9 @@ import { useDeliveryAuth } from '../context/DeliveryAuthContext';
 import deliveryApi, { formatINR } from '../services/deliveryApi';
 import RadarOfferCard from '../components/RadarOfferCard';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
+import MobileConnectModal from '../components/MobileConnectModal';
+import FaceVerificationModal from '../components/FaceVerificationModal';
+import TrackedPhotoModal from '../components/TrackedPhotoModal';
 import { useNavigate } from 'react-router-dom';
 
 export default function DutyDashboard() {
@@ -13,6 +16,9 @@ export default function DutyDashboard() {
   const [lat, setLat] = useState('16.3067');
   const [lng, setLng] = useState('80.4365');
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
+  const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
+  const [isTrackedPhotoOpen, setIsTrackedPhotoOpen] = useState(false);
   const navigate = useNavigate();
 
   const fetchStats = () => {
@@ -108,6 +114,139 @@ export default function DutyDashboard() {
         >
           <i className="fa-solid fa-power-off"></i> {isOnline ? 'DUTY ONLINE (Accepting Deliveries)' : 'OFFLINE (Tap to Go on Duty)'}
         </button>
+
+        {/* Quick Launch Action Cards (Mobile URL & Face Auth) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+          {/* Mobile Radar URL Card */}
+          <div style={{
+            background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+            border: '1px solid #334155',
+            borderRadius: '12px',
+            padding: '12px 14px',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                background: '#10B981',
+                color: '#090D16',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.1rem'
+              }}>
+                <i className="fa-solid fa-mobile-screen"></i>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#FFF' }}>Mobile Delivery App</div>
+                <div style={{ fontSize: '0.68rem', color: '#34D399', fontFamily: 'monospace' }}>http://172.16.49.17:3002</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsMobileModalOpen(true)}
+              style={{
+                background: '#10B981',
+                color: '#090D16',
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontWeight: '800',
+                fontSize: '0.74rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <i className="fa-solid fa-qrcode"></i> Scan QR
+            </button>
+          </div>
+
+          {/* Live Face Authentication & Photo Tracking Card */}
+          <div style={{
+            background: agentUser?.isFaceVerified ? '#F0FDF4' : '#FFFBEB',
+            border: `1px solid ${agentUser?.isFaceVerified ? '#86EFAC' : '#FDE68A'}`,
+            borderRadius: '12px',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {agentUser?.faceVerificationPhoto ? (
+                <img
+                  src={agentUser.faceVerificationPhoto}
+                  alt="Verified Face"
+                  style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #10B981' }}
+                />
+              ) : (
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: agentUser?.isFaceVerified ? '#DCFCE7' : '#FEF3C7',
+                  color: agentUser?.isFaceVerified ? '#166534' : '#92400E',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.1rem'
+                }}>
+                  <i className={`fa-solid ${agentUser?.isFaceVerified ? 'fa-user-check' : 'fa-camera'}`}></i>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: '800', color: agentUser?.isFaceVerified ? '#166534' : '#92400E' }}>
+                  {agentUser?.isFaceVerified ? 'Face Biometric: Sealed' : 'Mandatory Face Verification'}
+                </div>
+                <div style={{ fontSize: '0.68rem', color: agentUser?.isFaceVerified ? '#15803D' : '#78350F' }}>
+                  {agentUser?.isFaceVerified ? 'Photo tracked in KYC registry' : 'Camera snapshot required'}
+                </div>
+              </div>
+            </div>
+
+            {agentUser?.isFaceVerified ? (
+              <button
+                onClick={() => setIsTrackedPhotoOpen(true)}
+                style={{
+                  background: '#166534',
+                  color: '#FFF',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontWeight: '800',
+                  fontSize: '0.74rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                📸 Track Photo
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsFaceModalOpen(true)}
+                style={{
+                  background: '#D97706',
+                  color: '#FFF',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontWeight: '800',
+                  fontSize: '0.74rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <i className="fa-solid fa-camera"></i> Verify Camera
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Temporary Password Change Notice */}
@@ -319,6 +458,34 @@ export default function DutyDashboard() {
         onClose={() => setIsScanModalOpen(false)}
         onOrderClaimed={handleOrderClaimedFromModal}
       />
+
+      {/* Face Verification Modal (Camera & Photo Tracking) */}
+      {isFaceModalOpen && (
+        <FaceVerificationModal
+          isOpen={isFaceModalOpen}
+          onClose={() => setIsFaceModalOpen(false)}
+          onVerifiedSuccess={() => fetchStats()}
+        />
+      )}
+
+      {/* Tracked Photo Modal */}
+      {isTrackedPhotoOpen && (
+        <TrackedPhotoModal
+          isOpen={isTrackedPhotoOpen}
+          onClose={() => setIsTrackedPhotoOpen(false)}
+          photoUrl={agentUser?.faceVerificationPhoto}
+          verifiedAt={agentUser?.faceVerifiedAt}
+          agentName={agentUser?.fullName}
+        />
+      )}
+
+      {/* Mobile Connect & QR Code Modal */}
+      {isMobileModalOpen && (
+        <MobileConnectModal
+          isOpen={isMobileModalOpen}
+          onClose={() => setIsMobileModalOpen(false)}
+        />
+      )}
 
     </main>
   );

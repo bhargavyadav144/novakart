@@ -23,6 +23,9 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import giftCardRoutes from './routes/giftCardRoutes.js';
 import warehouseRoutes from './routes/warehouseRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import returnRoutes from './routes/returnRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
+import callQueueRoutes from './routes/callQueueRoutes.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -88,6 +91,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/gift-cards', giftCardRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/returns', returnRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/call-queue', callQueueRoutes);
 
 // Error Handling Middlewares
 app.use(notFoundHandler);

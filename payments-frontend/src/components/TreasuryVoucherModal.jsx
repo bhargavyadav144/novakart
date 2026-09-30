@@ -16,6 +16,15 @@ export const formatDateTimeWithSeconds = (dateStr) => {
   });
 };
 
+export const formatStackedDateTime = (dateStr) => {
+  if (!dateStr) return { date: 'N/A', time: '' };
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return { date: 'N/A', time: '' };
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  return { date, time };
+};
+
 export default function TreasuryVoucherModal({ transaction, onClose }) {
   if (!transaction) return null;
 

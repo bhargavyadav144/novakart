@@ -24,13 +24,21 @@ start "Admin Control Center (Port 3003)" cmd /k "title Admin Control Center (Por
 echo 6. Starting Warehouse Hub Logistics on Port 3004...
 start "Warehouse Hub Logistics (Port 3004)" cmd /k "title Warehouse Hub Logistics (Port 3004) && cd /d "%~dp0warehouse-frontend" && npm run dev"
 
+echo 7. Starting Digital Payments & Treasury on Port 3005...
+start "Digital Payments & Treasury (Port 3005)" cmd /k "title Digital Payments & Treasury (Port 3005) && cd /d "%~dp0payments-frontend" && npm run dev"
+
+echo 8. Starting Help Center Resolution Desk on Port 3006...
+start "Help Center Resolution Desk (Port 3006)" cmd /k "title Help Center Resolution Desk (Port 3006) && cd /d "%~dp0support-frontend" && npm run dev"
+
 echo.
 echo =========================================================================
-echo   All 6 Terminal Windows Have Been Launched!
-echo   1. Customer Web Store:       http://localhost:3000
-echo   2. Seller Business Portal:   http://localhost:3001
-echo   3. Delivery Agent Radar:     http://localhost:3002
-echo   4. Admin Master Control:     http://localhost:3003
-echo   5. Warehouse Hub Logistics:  http://localhost:3004
-echo   6. Backend API Engine:       http://localhost:5050
+echo   All 8 Terminal Windows Have Been Launched!
+echo   1. Customer Web Store:            http://localhost:3000
+echo   2. Seller Business Portal:        http://localhost:3001
+echo   3. Delivery Agent Radar:          http://localhost:3002
+echo   4. Admin Master Control:          http://localhost:3003
+echo   5. Warehouse Hub Logistics:       http://localhost:3004
+echo   6. Digital Payments & Treasury:   http://localhost:3005
+echo   7. Help Center Resolution Desk:   http://localhost:3006
+echo   8. Backend API Engine:            http://localhost:5050
 echo =========================================================================

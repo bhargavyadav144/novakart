@@ -99,10 +99,264 @@ a { text-decoration: none; color: inherit; }
   }
 }
 
-/* Container inside mobile frame */
+/* Container inside mobile frame with safe bottom clearance */
 .delivery-container {
   width: 100%;
-  padding: 14px 14px 24px 14px;
+  box-sizing: border-box;
+  padding: 14px 14px 92px 14px; /* Generous bottom padding to clear 64px bottom nav */
+}
+
+/* Full-viewport map mode: zero padding, no parent scrolling */
+.delivery-screen-body.map-mode {
+  overflow: hidden !important;
+}
+
+/* ─── RAPIDO / GOOGLE MAPS LIVE NAVIGATION HUD ─── */
+.rapido-nav-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rapido-map-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Google Maps Style Navigation Top Banner */
+.gmaps-top-banner {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 100;
+  background: #064E3B; /* Google Maps turn green */
+  color: #FFFFFF;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+.gmaps-turn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.gmaps-instruction {
+  flex: 1;
+  min-width: 0;
+}
+
+.gmaps-instruction-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.gmaps-instruction-sub {
+  font-size: 0.72rem;
+  color: #A7F3D0;
+  margin: 2px 0 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gmaps-eta-badge {
+  text-align: right;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.gmaps-eta-time {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #34D399;
+  line-height: 1;
+}
+
+.gmaps-eta-dist {
+  font-size: 0.68rem;
+  color: #D1FAE5;
+  margin-top: 2px;
+}
+
+/* Floating Action Controls on Map */
+.map-floating-controls {
+  position: absolute;
+  top: 86px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-control-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  color: #0F172A;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.map-control-btn:active {
+  transform: scale(0.92);
+}
+
+/* Simulation Playback Pill */
+.sim-playback-pill {
+  position: absolute;
+  top: 86px;
+  left: 12px;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.88);
+  color: #FFFFFF;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Rapido Style Floating Bottom Card */
+.rapido-bottom-card {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 100;
+  background: #FFFFFF;
+  border-radius: 18px;
+  box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.22);
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+  max-height: 58%;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.rapido-stop-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border-bottom: 1px solid #F1F5F9;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.rapido-stop-pill {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.rapido-stop-pill.active {
+  background: #2563EB;
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.rapido-stop-pill.inactive {
+  background: #E2E8F0;
+  color: #475569;
+}
+
+.rapido-card-content {
+  padding: 12px 14px;
+  overflow-y: auto;
+  max-height: 220px;
+}
+
+/* Rider Marker Pulse */
+.rider-marker-ring {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.rider-marker-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.35);
+  animation: pulse 1.5s infinite;
+}
+
+.rider-marker-core {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #10B981;
+  border: 2px solid #FFFFFF;
+  color: #090D16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Pulse animation for radar & call waves */

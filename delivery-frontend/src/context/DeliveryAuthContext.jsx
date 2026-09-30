@@ -36,23 +36,68 @@ export function DeliveryAuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [incomingRadarOffers, setIncomingRadarOffers] = useState([]);
   const [socket, setSocket] = useState(null);
+  const [activeOrdersCount, setActiveOrdersCount] = useState(0);
 
+  const fetchActiveCount = () => {
+    const savedToken = localStorage.getItem('novakart_delivery_token');
+    if (!savedToken) return;
+    deliveryApi.get('/delivery/dashboard-stats')
+      .then(({ data }) => {
+        if (data.stats?.activeOrdersCount !== undefined) {
+          setActiveOrdersCount(data.stats.activeOrdersCount);
+        } else if (data.activeOrders) {
+          setActiveOrdersCount(data.activeOrders.length);
+        }
+      })
+      .catch(() => {});
+  };
 
-  // Always fetch fresh approval status from backend on load
+  const updateAgentUser = (updatedFields) => {
+    setAgentUser(prev => {
+      const nextUser = { ...(prev || {}), ...updatedFields };
+      localStorage.setItem('novakart_delivery_user', JSON.stringify(nextUser));
+      return nextUser;
+    });
+  };
+
+  // Always fetch fresh profile, online status, face verification & active count from backend
   useEffect(() => {
     const savedToken = localStorage.getItem('novakart_delivery_token');
     if (!savedToken) return;
-    deliveryApi.get('/auth/me').then(({ data }) => {
-      if (data.deliveryAgent) {
+    fetchActiveCount();
+    deliveryApi.get('/delivery/profile').then(({ data }) => {
+      if (data.profile) {
         const freshUser = {
           ...JSON.parse(localStorage.getItem('novakart_delivery_user') || '{}'),
-          isApproved: data.deliveryAgent.isApproved,
-          status: data.deliveryAgent.status
+          fullName: data.profile.fullName || data.profile.name,
+          isApproved: data.profile.isApproved,
+          status: data.profile.status,
+          isOnline: data.profile.isOnline,
+          profileImage: data.profile.profileImage || data.profile.faceVerificationPhoto,
+          avatar: data.profile.profileImage || data.profile.faceVerificationPhoto || data.profile.avatar,
+          isFaceVerified: !!data.profile.isFaceVerified,
+          faceVerificationPhoto: data.profile.faceVerificationPhoto
         };
         setAgentUser(freshUser);
         localStorage.setItem('novakart_delivery_user', JSON.stringify(freshUser));
       }
-    }).catch(() => {});
+    }).catch(() => {
+      deliveryApi.get('/auth/me').then(({ data }) => {
+        if (data.deliveryAgent) {
+          const freshUser = {
+            ...JSON.parse(localStorage.getItem('novakart_delivery_user') || '{}'),
+            isApproved: data.deliveryAgent.isApproved,
+            status: data.deliveryAgent.status,
+            isOnline: data.deliveryAgent.isOnline,
+            isFaceVerified: !!data.deliveryAgent.isFaceVerified,
+            faceVerificationPhoto: data.deliveryAgent.faceVerificationPhoto,
+            profileImage: data.deliveryAgent.profileImage
+          };
+          setAgentUser(freshUser);
+          localStorage.setItem('novakart_delivery_user', JSON.stringify(freshUser));
+        }
+      }).catch(() => {});
+    });
   }, []);
 
   useEffect(() => {
@@ -82,14 +127,22 @@ export function DeliveryAuthProvider({ children }) {
     }
   }, [agentUser]);
 
-  const login = async (email, password) => {
+  const setSession = (userData, userToken) => {
+    setAgentUser(userData);
+    setToken(userToken);
+    localStorage.setItem('novakart_delivery_user', JSON.stringify(userData));
+    localStorage.setItem('novakart_delivery_token', userToken);
+  };
+
+  const login = async (email, password, directToken = null, directUser = null) => {
+    if (directToken && directUser) {
+      setSession(directUser, directToken);
+      return { success: true, message: 'Logged in successfully!' };
+    }
     setLoading(true);
     try {
       const { data } = await deliveryApi.post('/auth/login', { email, password, expectedRole: 'delivery' });
-      setAgentUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('novakart_delivery_user', JSON.stringify(data.user));
-      localStorage.setItem('novakart_delivery_token', data.token);
+      setSession(data.user, data.token);
       return { success: true, message: data.message };
     } catch (err) {
       return { success: false, message: err.response?.data?.message || 'Login failed' };
@@ -128,6 +181,7 @@ export function DeliveryAuthProvider({ children }) {
   return (
     <DeliveryAuthContext.Provider value={{
       agentUser,
+      updateAgentUser,
       token,
       loading,
       login,
@@ -136,6 +190,8 @@ export function DeliveryAuthProvider({ children }) {
       incomingRadarOffers,
       setIncomingRadarOffers,
       socket,
+      activeOrdersCount,
+      fetchActiveCount,
       isScanModalOpen,
       openScanner,
       closeScanner,

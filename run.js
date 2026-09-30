@@ -24,7 +24,8 @@ const services = [
   { name: 'DELIVERY RADAR (Port 3002)', dir: 'delivery-frontend', cmd: npmCmd, args: ['run', 'dev'], port: 3002, color: '\x1b[35m' },
   { name: 'ADMIN CONTROL CENTER (Port 3003)', dir: 'admin-frontend', cmd: npmCmd, args: ['run', 'dev'], port: 3003, color: '\x1b[34m' },
   { name: 'WAREHOUSE LOGISTICS (Port 3004)', dir: 'warehouse-frontend', cmd: npmCmd, args: ['run', 'dev'], port: 3004, color: '\x1b[35m' },
-  { name: 'DIGITAL PAYMENTS & TREASURY (Port 3005)', dir: 'payments-frontend', cmd: npmCmd, args: ['run', 'dev'], port: 3005, color: '\x1b[32m' }
+  { name: 'DIGITAL PAYMENTS & TREASURY (Port 3005)', dir: 'payments-frontend', cmd: npmCmd, args: ['run', 'dev'], port: 3005, color: '\x1b[32m' },
+  { name: 'HELP CENTER RESOLUTION DESK (Port 3006)', dir: 'support-frontend', cmd: npmCmd, args: ['run', 'dev'], port: 3006, color: '\x1b[36m' }
 ];
 
 // Check dependencies
@@ -42,7 +43,7 @@ for (const service of services) {
 }
 
 console.log('\n========================================================================');
-console.log('🌐 ALL 7 SYSTEM SERVICES ARE STARTING CONCURRENTLY:');
+console.log('🌐 ALL 8 SYSTEM SERVICES ARE STARTING CONCURRENTLY:');
 console.log('------------------------------------------------------------------------');
 console.log('🛒 Customer Web Store:            http://localhost:3000');
 console.log('🏪 Seller Business Portal:        http://localhost:3001');
@@ -50,6 +51,7 @@ console.log('🛵 Delivery Agent Radar:          http://localhost:3002');
 console.log('🛡️ Admin Master Control:          http://localhost:3003');
 console.log('🏭 Warehouse Hub Logistics:       http://localhost:3004');
 console.log('💰 Digital Payments & Treasury:   http://localhost:3005');
+console.log('🎧 Help Center Resolution Desk:   http://localhost:3006');
 console.log('⚡ Unified Backend Engine:        http://localhost:5050');
 console.log('========================================================================\n');
 

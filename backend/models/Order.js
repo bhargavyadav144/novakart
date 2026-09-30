@@ -18,7 +18,7 @@ const orderSchema = new mongoose.Schema({
     destinationBranch: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', default: null },
     transitStage: { 
       type: String, 
-      enum: ['AT_STORE', 'DISPATCHED_TO_HUB', 'IN_REGIONAL_HUB', 'IN_TRANSIT_TO_BRANCH', 'AT_DELIVERY_BRANCH', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+      enum: ['AT_STORE', 'DISPATCHED_TO_HUB', 'IN_REGIONAL_HUB', 'IN_TRANSIT_TO_BRANCH', 'AT_DELIVERY_BRANCH', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURN_IN_PROGRESS', 'RTO_IN_TRANSIT'],
       default: 'AT_STORE'
     },
     estimatedTransitDays: { type: Number, default: 2 },
@@ -49,6 +49,14 @@ const orderSchema = new mongoose.Schema({
   orderStatus: { type: String, enum: Object.values(ORDER_STATUSES), default: ORDER_STATUSES.PENDING },
   deliveryAgentId: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryAgent', default: null },
   deliveryOtp: { type: String, default: '1234' },
+  returnOtp: { type: String, default: '' },
+  doorstepReturnReason: { type: String, default: '' },
+  deliveryAttempts: [{
+    attemptNumber: { type: Number, default: 1 },
+    timestamp: { type: Date, default: Date.now },
+    reason: { type: String, default: 'Customer Not Lifting Call / Unreachable' },
+    riderNotes: { type: String, default: '' }
+  }],
   proofOfDelivery: {
     verifiedMethod: { type: String, enum: ['BARCODE_SCAN', 'MANUAL_CODE_ENTRY', 'DIRECT_OVERRIDE', 'NONE'], default: 'NONE' },
     scannedCode: { type: String, default: '' },
@@ -56,7 +64,37 @@ const orderSchema = new mongoose.Schema({
     handoverNotes: { type: String, default: '' },
     cashCollected: { type: Number, default: 0 }
   },
+  returnRequest: { type: mongoose.Schema.Types.ObjectId, ref: 'ReturnRequest', default: null },
+  returnStatus: {
+    type: String,
+    enum: [
+      'NONE',
+      'RETURN_REQUESTED',
+      'EXCHANGE_REQUESTED',
+      'RETURN_APPROVED',
+      'EXCHANGE_APPROVED',
+      'PICKUP_SCHEDULED',
+      'RETURN_IN_PROGRESS',
+      'RETURN_PARCEL_PICKED_UP',
+      'RETURN_QC_PASSED',
+      'RETURN_QC_FAILED',
+      'REFUND_PENDING_APPROVAL',
+      'REFUND_DISBURSED',
+      'RETURN_REFUNDED',
+      'REFUNDED',
+      'REFUND_APPROVED',
+      'RETURNED',
+      'EXCHANGED',
+      'RETURN_CANCELLED',
+      'RETURN_REJECTED',
+      'DOORSTEP_REJECTED',
+      'CUSTOMER_NOT_RESPONDING',
+      'RTO_IN_TRANSIT'
+    ],
+    default: 'NONE'
+  },
   cancellationReason: { type: String, default: '' },
+
   timeline: [{
     status: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },

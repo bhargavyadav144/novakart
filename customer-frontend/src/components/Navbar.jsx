@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { useDeviceMode } from '../context/DeviceModeContext';
 import NotificationBell from './NotificationBell';
 import CustomerBarcodeSearchModal from './CustomerBarcodeSearchModal';
+import api from '../services/api';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -14,7 +15,40 @@ export default function Navbar() {
   const [category, setCategory] = useState('all');
   const [selectedPincode, setSelectedPincode] = useState('522019');
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  
+  // Pincode Delivery Availability Modal states
+  const [isPincodeModalOpen, setIsPincodeModalOpen] = useState(false);
+  const [modalPincodeInput, setModalPincodeInput] = useState('522019');
+  const [modalPincodeLoading, setModalPincodeLoading] = useState(false);
+  const [modalPincodeResult, setModalPincodeResult] = useState(null);
+
   const navigate = useNavigate();
+
+  const handleVerifyPincodeModal = async (e) => {
+    if (e) e.preventDefault();
+    if (!modalPincodeInput || modalPincodeInput.trim().length < 5) {
+      alert('Please enter a valid 6-digit pincode.');
+      return;
+    }
+    setModalPincodeLoading(true);
+    try {
+      const { data } = await api.get('/warehouses/check-serviceability', {
+        params: { pincode: modalPincodeInput.trim() }
+      });
+      setModalPincodeResult(data);
+      if (data.isServiceable) {
+        setSelectedPincode(modalPincodeInput.trim());
+      }
+    } catch (err) {
+      setModalPincodeResult({
+        success: false,
+        isServiceable: false,
+        message: '❌ Error checking pincode delivery availability.'
+      });
+    } finally {
+      setModalPincodeLoading(false);
+    }
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -70,6 +104,16 @@ export default function Navbar() {
       icon: 'fa-solid fa-square-plus',
       iconColor: '#059669',
       link: '/products?category=beauty'
+    },
+    {
+      id: 'help',
+      name: 'Help',
+      bg: '#F3E8FF',
+      border: '#E9D5FF',
+      icon: 'fa-solid fa-headset',
+      iconColor: '#7C3AED',
+      badge: '24/7 Support',
+      link: '/help-center'
     }
   ];
 
@@ -222,8 +266,9 @@ export default function Navbar() {
         }}>
           <div
             onClick={() => {
-              const newPin = prompt('Enter Delivery Pincode:', selectedPincode);
-              if (newPin) setSelectedPincode(newPin.trim());
+              setModalPincodeInput(selectedPincode);
+              setModalPincodeResult(null);
+              setIsPincodeModalOpen(true);
             }}
             style={{
               display: 'flex',
@@ -330,8 +375,24 @@ export default function Navbar() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Link to="/profile" style={{ color: '#fff', fontSize: '0.82rem', fontWeight: '600' }}>
-                  Hi, {user.name.split(' ')[0]}
+                <Link to="/profile" style={{ color: '#fff', fontSize: '0.82rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <img
+                    src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3B82F6&color=fff&bold=true`}
+                    alt={user.name}
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: '2px solid #3B82F6',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                    }}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3B82F6&color=fff&bold=true`;
+                    }}
+                  />
+                  <span>Hi, {user.name.split(' ')[0]}</span>
                 </Link>
                 <NotificationBell theme="dark" />
               </div>
@@ -408,8 +469,24 @@ export default function Navbar() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Link to="/profile" style={{ color: '#fff', fontSize: '0.85rem', fontWeight: '600' }}>
-                  <i className="fa-solid fa-user-check"></i> Hi, {user.name.split(' ')[0]}
+                <Link to="/profile" style={{ color: '#fff', fontSize: '0.85rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <img
+                    src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3B82F6&color=fff&bold=true`}
+                    alt={user.name}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: '2px solid #3B82F6',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                    }}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3B82F6&color=fff&bold=true`;
+                    }}
+                  />
+                  <span>Hi, {user.name.split(' ')[0]}</span>
                 </Link>
                 <NotificationBell theme="dark" />
                 <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>
@@ -435,6 +512,7 @@ export default function Navbar() {
             <li><Link to="/" className="nav-link"><i className="fa-solid fa-house"></i> Home</Link></li>
             <li><Link to="/products" className="nav-link"><i className="fa-solid fa-box"></i> All Products</Link></li>
             <li><Link to="/orders" className="nav-link"><i className="fa-solid fa-clock-rotate-left"></i> My Orders</Link></li>
+            <li><Link to="/help-center" className="nav-link"><i className="fa-solid fa-headset"></i> Help Center</Link></li>
             {categories.slice(1).map(cat => (
               <li key={cat.id}>
                 <Link to={`/products?category=${cat.id}`} className="nav-link">
@@ -445,6 +523,72 @@ export default function Navbar() {
           </ul>
         </div>
       </nav>
+
+      {/* Interactive Pincode Delivery Availability Assessor Modal */}
+      {isPincodeModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(5px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#fff', width: '100%', maxWidth: '440px', borderRadius: '16px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.25)', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="fa-solid fa-truck-ramp-box" style={{ color: '#0284c7', fontSize: '1.25rem' }}></i>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#0f172a' }}>Pincode Service Checker</h3>
+              </div>
+              <button onClick={() => setIsPincodeModalOpen(false)} style={{ border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748b' }}>
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyPincodeModal}>
+              <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Enter Delivery Postal Pincode:
+              </label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. 522019, 522001, 500001"
+                  value={modalPincodeInput}
+                  onChange={(e) => setModalPincodeInput(e.target.value)}
+                  maxLength={6}
+                  style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.95rem', fontWeight: '600' }}
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={modalPincodeLoading}
+                  style={{ background: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', padding: '0 16px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' }}
+                >
+                  {modalPincodeLoading ? 'Checking...' : 'Verify'}
+                </button>
+              </div>
+            </form>
+
+            {modalPincodeResult && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px',
+                borderRadius: '10px',
+                lineHeight: '1.4',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                background: modalPincodeResult.isServiceable ? '#f0fdf4' : (modalPincodeResult.status === 'maintenance' ? '#fffbe6' : '#fef2f2'),
+                color: modalPincodeResult.isServiceable ? '#166534' : (modalPincodeResult.status === 'maintenance' ? '#b45309' : '#991b1b'),
+                border: `1px solid ${modalPincodeResult.isServiceable ? '#bbf7d0' : (modalPincodeResult.status === 'maintenance' ? '#ffe58f' : '#fecaca')}`
+              }}>
+                <div style={{ fontWeight: '800', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <i className={modalPincodeResult.isServiceable ? "fa-solid fa-circle-check" : "fa-solid fa-circle-xmark"}></i>
+                  {modalPincodeResult.isServiceable ? 'Delivery Service Available' : (modalPincodeResult.status === 'maintenance' ? 'Delivery Temporarily Suspended' : 'No Delivery Service')}
+                </div>
+                <div>{modalPincodeResult.message}</div>
+                {modalPincodeResult.isServiceable && (
+                  <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#047857' }}>
+                    Active Location: <strong>Pincode {modalPincodeResult.pincode}</strong> ({modalPincodeResult.warehouseCity})
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }

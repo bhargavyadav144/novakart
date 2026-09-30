@@ -4,24 +4,22 @@ import { useDeviceMode } from '../context/DeviceModeContext';
 import { Link } from 'react-router-dom';
 import api, { formatINR } from '../services/api';
 
-const AVATAR_PRESETS = [
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
-];
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
 
 export default function ProfilePage() {
   const { user, logout, updateProfile } = useAuth();
   const { isPhone } = useDeviceMode();
-  const [activeTab, setActiveTab] = useState('personal'); // 'personal' | 'security' | 'presets' | 'rewards'
+  const searchParams = new URLSearchParams(window.location.search);
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    tabParam === 'rewards' || tabParam === 'giftcards' ? 'rewards' : 'personal'
+  );
   
   // Edit Form Fields (Personal settings)
   const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [avatar, setAvatar] = useState(user?.avatar || AVATAR_PRESETS[0]);
+  const [avatar, setAvatar] = useState(user?.avatar || DEFAULT_AVATAR);
   const [gender, setGender] = useState(user?.gender || '');
   const [dob, setDob] = useState(user?.dob || '');
 
@@ -42,6 +40,17 @@ export default function ProfilePage() {
 
   // Gift Card reward states
   const [giftCards, setGiftCards] = useState([]);
+  const [copiedCardId, setCopiedCardId] = useState(null);
+  const [scratchedCards, setScratchedCards] = useState({});
+
+  const handleCopyCardCode = (e, code, id) => {
+    e.stopPropagation();
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopiedCardId(id);
+    setTimeout(() => setCopiedCardId(null), 2500);
+  };
+
 
   // Geolocation and map UI states
   const [locating, setLocating] = useState(false);
@@ -131,10 +140,13 @@ export default function ProfilePage() {
   const leafletMapInstance = useRef(null);
   const markerInstance = useRef(null);
 
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [searchingLocation, setSearchingLocation] = useState(false);
+
   useEffect(() => {
     if (showMapModal && mapLoaded && mapRef.current) {
       const timer = setTimeout(() => {
-        const defaultCoords = [17.3850, 78.4867]; // Hyderabad, India
+        const defaultCoords = [16.3067, 80.4365]; // Local AP / Guntur region default
         const initialCoords = pinnedCoords || defaultCoords;
 
         if (leafletMapInstance.current) {
@@ -179,6 +191,22 @@ export default function ProfilePage() {
 
         performReverseGeocode({ lat: initialCoords[0], lng: initialCoords[1] });
 
+        // Auto-locate GPS on map open if pinnedCoords was not previously set
+        if (!pinnedCoords && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const deviceLat = pos.coords.latitude;
+              const deviceLng = pos.coords.longitude;
+              map.setView([deviceLat, deviceLng], 15);
+              marker.setLatLng([deviceLat, deviceLng]);
+              setPinnedCoords([deviceLat, deviceLng]);
+              performReverseGeocode({ lat: deviceLat, lng: deviceLng });
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 6000 }
+          );
+        }
+
         marker.on('dragend', () => {
           const latLng = marker.getLatLng();
           setPinnedCoords([latLng.lat, latLng.lng]);
@@ -195,7 +223,37 @@ export default function ProfilePage() {
 
       return () => clearTimeout(timer);
     }
-  }, [showMapModal, mapLoaded, pinnedCoords]);
+  }, [showMapModal, mapLoaded]);
+
+  const handleSearchLocationOnMap = async () => {
+    if (!mapSearchQuery.trim()) return;
+    setSearchingLocation(true);
+    try {
+      const q = mapSearchQuery.trim();
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Andhra Pradesh, India')}&limit=1`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const targetLat = parseFloat(data[0].lat);
+        const targetLng = parseFloat(data[0].lon);
+        setPinnedCoords([targetLat, targetLng]);
+        setMapSelectedAddress(data[0].display_name);
+        if (leafletMapInstance.current) {
+          leafletMapInstance.current.setView([targetLat, targetLng], 15);
+        }
+        if (markerInstance.current) {
+          markerInstance.current.setLatLng([targetLat, targetLng]);
+        }
+      } else {
+        alert(`Location "${mapSearchQuery}" not found. Try searching with Pincode or Village name.`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error searching location');
+    } finally {
+      setSearchingLocation(false);
+    }
+  };
+
 
   const handleConfirmMapLocation = () => {
     if (!pinnedCoords) return;
@@ -404,6 +462,7 @@ export default function ProfilePage() {
     try {
       const res = await updateProfile({
         name,
+        email,
         phone,
         avatar,
         gender,
@@ -411,7 +470,7 @@ export default function ProfilePage() {
         address: JSON.stringify(savedAddresses)
       });
       if (res.success) {
-        setSuccessMsg('✅ Profile updated successfully!');
+        setSuccessMsg('✅ Profile & Email updated successfully!');
       } else {
         setErrorMsg(res.message);
       }
@@ -422,30 +481,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSelectPresetAvatar = async (presetUrl) => {
-    setAvatar(presetUrl);
-    setSuccessMsg('');
-    setUpdating(true);
-    try {
-      const res = await updateProfile({
-        name,
-        phone,
-        avatar: presetUrl,
-        gender,
-        dob,
-        address: JSON.stringify(savedAddresses)
-      });
-      if (res.success) {
-        setSuccessMsg('✅ Preset avatar updated successfully!');
-      } else {
-        setErrorMsg(res.message);
-      }
-    } catch {
-      setErrorMsg('An error occurred updating preset avatar.');
-    } finally {
-      setUpdating(false);
-    }
-  };
+
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -522,6 +558,38 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
+  if (!user) {
+    return (
+      <main 
+        className="container section-padding" 
+        style={{ 
+          maxWidth: '560px', 
+          margin: '40px auto', 
+          textAlign: 'center',
+          padding: isPhone ? '24px 16px' : '40px 20px'
+        }}
+      >
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '40px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+          <div style={{ width: '68px', height: '68px', borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', fontSize: '1.8rem', color: '#3B82F6' }}>
+            <i className="fa-solid fa-user-lock"></i>
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '8px' }}>User Account &amp; Profile</h2>
+          <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '24px', lineHeight: '1.5' }}>
+            Please log in or create an account to view and update your user profile, delivery addresses, and rewards.
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <Link to="/login" className="btn-primary" style={{ padding: '10px 24px', textDecoration: 'none', borderRadius: '8px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <i className="fa-solid fa-arrow-right-to-bracket"></i> Login Now
+            </Link>
+            <Link to="/register" style={{ padding: '10px 24px', textDecoration: 'none', borderRadius: '8px', fontWeight: '700', border: '1px solid #CBD5E1', color: '#334155', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              Create Account
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main 
       className="container section-padding"
@@ -551,11 +619,7 @@ export default function ProfilePage() {
               <input type="file" id="custom-avatar" style={{ display: 'none' }} accept="image/*" onChange={handleImageUpload} />
             </div>
 
-            <div style={{ fontSize: '0.78rem', color: 'var(--secondary-color)', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', textDecoration: 'underline' }} onClick={() => setActiveTab('presets')}>
-              Choose Preset Avatar
-            </div>
-
-            <h3 style={{ fontSize: isPhone ? '1.15rem' : '1.25rem', fontWeight: '800', color: 'var(--primary-color)', margin: '0 0 4px 0', wordBreak: 'break-word' }}>
+            <h3 style={{ fontSize: isPhone ? '1.15rem' : '1.25rem', fontWeight: '800', color: 'var(--primary-color)', margin: '12px 0 4px 0', wordBreak: 'break-word' }}>
               {name || 'Registered Customer'}
             </h3>
             
@@ -579,9 +643,6 @@ export default function ProfilePage() {
               </button>
               <button onClick={() => setActiveTab('security')} style={{ width: '100%', textAlign: 'left', background: activeTab === 'security' ? 'var(--secondary-color)' : '#f8fafc', color: activeTab === 'security' ? '#fff' : '#444', border: '1px solid #e2e8f0', padding: '10px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: isPhone ? '0.78rem' : '0.88rem', transition: 'all 0.2s' }}>
                 <i className="fa-solid fa-shield-halved"></i> Access &amp; Security
-              </button>
-              <button onClick={() => setActiveTab('presets')} style={{ width: '100%', textAlign: 'left', background: activeTab === 'presets' ? 'var(--secondary-color)' : '#f8fafc', color: activeTab === 'presets' ? '#fff' : '#444', border: '1px solid #e2e8f0', padding: '10px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: isPhone ? '0.78rem' : '0.88rem', transition: 'all 0.2s' }}>
-                <i className="fa-solid fa-image"></i> Avatar Presets
               </button>
             </div>
           </div>
@@ -626,8 +687,23 @@ export default function ProfilePage() {
                   </div>
                   
                   <div>
-                    <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#555', display: 'block', marginBottom: '6px' }}>Email Address (Verified)</label>
-                    <input type="text" className="form-input" value={user.email} disabled style={{ background: '#f5f5f5', color: '#888', border: '1px solid #ddd', cursor: 'not-allowed' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#555', margin: 0 }}>Primary Email Address (Real Mail Sync)</label>
+                      <span style={{ fontSize: '0.72rem', color: '#059669', background: '#D1FAE5', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                        <i className="fa-solid fa-circle-check"></i> Verified Real Mail
+                      </span>
+                    </div>
+                    <input
+                      type="email"
+                      className="form-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. yourname@gmail.com"
+                      required
+                    />
+                    <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      Updating your email address will immediately send a verification notification to your new inbox.
+                    </small>
                   </div>
 
                   <div>
@@ -825,84 +901,159 @@ export default function ProfilePage() {
                       const isExpired = new Date() > new Date(card.expiryDate);
                       const isExpiredSoon = !card.isUsed && !isExpired && (new Date(card.expiryDate) - new Date() < 5 * 24 * 60 * 60 * 1000);
                       
-                      let statusText = 'ACTIVE';
-                      let statusColor = '#2563eb'; // blue
-                      let statusBg = '#eff6ff';
+                      let statusText = 'AVAILABLE';
+                      let statusColor = '#10B981'; // emerald
+                      let statusBg = 'rgba(16, 185, 129, 0.15)';
+                      let borderStyle = '1px solid #10B981';
 
                       if (card.isUsed) {
                         statusText = 'USED';
-                        statusColor = '#16a34a'; // green
-                        statusBg = '#f0fdf4';
+                        statusColor = '#94A3B8';
+                        statusBg = 'rgba(148, 163, 184, 0.15)';
+                        borderStyle = '1px solid #475569';
                       } else if (isExpired) {
                         statusText = 'EXPIRED';
-                        statusColor = '#dc2626'; // red
-                        statusBg = '#fef2f2';
+                        statusColor = '#EF4444';
+                        statusBg = 'rgba(239, 68, 68, 0.15)';
+                        borderStyle = '1px solid #EF4444';
                       } else if (isExpiredSoon) {
                         statusText = 'EXPIRING SOON';
-                        statusColor = '#d97706'; // amber
-                        statusBg = '#fffbeb';
+                        statusColor = '#F59E0B';
+                        statusBg = 'rgba(245, 158, 11, 0.15)';
+                        borderStyle = '1px solid #F59E0B';
                       }
 
+                      const isScratched = scratchedCards[card._id] || card.isUsed;
+
+                      // UNSCRATCHED CARD STATE (Scratch Foil View)
+                      if (!isScratched && !card.isUsed && !isExpired) {
+                        return (
+                          <div 
+                            key={card._id}
+                            onClick={() => setScratchedCards(prev => ({ ...prev, [card._id]: true }))}
+                            style={{
+                              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                              border: '2px dashed #f59e0b',
+                              borderRadius: '16px',
+                              padding: '24px',
+                              textAlign: 'center',
+                              position: 'relative',
+                              overflow: 'hidden',
+                              boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+                              color: '#FFFFFF',
+                              cursor: 'pointer',
+                              transition: 'transform 0.2s'
+                            }}
+                          >
+                            <div style={{
+                              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%)',
+                              borderRadius: '12px',
+                              padding: '20px 16px',
+                              boxShadow: 'inset 0 0 20px rgba(255,255,255,0.3)'
+                            }}>
+                              <div style={{ fontSize: '2.2rem', marginBottom: '4px' }}>🎁 ✨</div>
+                              <h3 style={{ margin: '0 0 4px', fontSize: '1.2rem', fontWeight: '900', color: '#FFFFFF' }}>
+                                ₹{card.amount} Off Reward Scratch Card
+                              </h3>
+                              <p style={{ margin: '0 0 12px', fontSize: '0.84rem', color: '#FEF3C7', fontWeight: '700' }}>
+                                ✨ Tap / Scratch Here to Reveal Your Unique Code
+                              </p>
+                              <button
+                                type="button"
+                                style={{
+                                  background: '#0F172A',
+                                  color: '#F59E0B',
+                                  border: '2px solid #FCD34D',
+                                  padding: '8px 22px',
+                                  borderRadius: '20px',
+                                  fontWeight: '900',
+                                  fontSize: '0.86rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <i className="fa-solid fa-hand-pointer" style={{ marginRight: '6px' }}></i> TAP TO SCRATCH
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // REVEALED CARD STATE
                       return (
                         <div 
                           key={card._id}
                           style={{
-                            background: card.isUsed || isExpired ? '#f8fafc' : '#ffffff',
-                            border: card.isUsed || isExpired ? '1px solid #e2e8f0' : '2px solid #ff9900',
-                            borderRadius: '12px',
+                            background: '#0F172A',
+                            border: borderStyle,
+                            borderRadius: '14px',
                             padding: isPhone ? '16px 12px' : '20px',
                             display: 'grid',
-                            gridTemplateColumns: isPhone ? '1fr' : '130px 1fr 120px',
+                            gridTemplateColumns: isPhone ? '1fr' : '140px 1fr auto',
                             alignItems: 'center',
                             gap: isPhone ? '12px' : '20px',
                             position: 'relative',
-                            opacity: card.isUsed || isExpired ? 0.7 : 1,
-                            boxShadow: card.isUsed || isExpired ? 'none' : '0 4px 15px rgba(255, 153, 0, 0.08)'
+                            color: '#FFFFFF',
+                            boxShadow: card.isUsed || isExpired ? 'none' : '0 8px 24px rgba(0,0,0,0.3)',
+                            opacity: card.isUsed || isExpired ? 0.75 : 1
                           }}
                         >
-                          {/* Left: Gift Value Card Mock */}
+                          {/* Left: Gift Value Card Badge */}
                           <div style={{
-                            background: card.isUsed || isExpired ? '#94a3b8' : 'linear-gradient(135deg, #ff9900, #ff5500)',
-                            color: '#white',
-                            borderRadius: '8px',
+                            background: card.isUsed || isExpired ? '#1E293B' : 'linear-gradient(135deg, #10B981, #059669)',
+                            color: '#FFFFFF',
+                            borderRadius: '10px',
                             padding: '14px 10px',
                             textAlign: 'center',
                             fontWeight: 'bold',
-                            boxShadow: card.isUsed || isExpired ? 'none' : '0 4px 10px rgba(255, 85, 0, 0.2)'
+                            border: card.isUsed || isExpired ? '1px solid #475569' : '1px solid #A7F3D0'
                           }}>
-                            <span style={{ fontSize: '0.65rem', display: 'block', color: 'rgba(255,255,255,0.8)', letterSpacing: '1px' }}>REWARD VALUE</span>
-                            <span style={{ fontSize: '1.4rem', display: 'block', color: '#fff', margin: '4px 0' }}>₹{card.amount}</span>
-                            <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '2px 8px', borderRadius: '12px' }}>GIFT CARD</span>
+                            <span style={{ fontSize: '0.65rem', display: 'block', color: 'rgba(255,255,255,0.85)', letterSpacing: '1px' }}>REWARD VALUE</span>
+                            <span style={{ fontSize: '1.5rem', display: 'block', color: '#FFFFFF', margin: '4px 0', fontWeight: '900' }}>₹{card.amount}</span>
+                            <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.2)', color: '#FFFFFF', padding: '2px 8px', borderRadius: '12px' }}>
+                              {card.isUsed ? 'REDEEMED' : 'SINGLE USE'}
+                            </span>
                           </div>
 
-                          {/* Center: Info Timeline */}
+                          {/* Center: Info & Copy Button */}
                           <div>
-                            <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>CODE: {card.code}</span>
-                            <h4 style={{ fontSize: '1.05rem', margin: '4px 0 6px 0', color: 'var(--primary-color)', fontWeight: '800' }}>
-                              ₹{card.amount} Off Checkout Reward
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                              <span style={{ fontSize: '1.05rem', color: '#10B981', fontWeight: '900', fontFamily: 'monospace', letterSpacing: '1.5px', background: 'rgba(16, 185, 129, 0.15)', padding: '6px 14px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.4)' }}>
+                                {card.code}
+                              </span>
+                              {!card.isUsed && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleCopyCardCode(e, card.code, card._id)}
+                                  style={{
+                                    background: copiedCardId === card._id ? '#10B981' : '#38BDF8',
+                                    color: '#0F172A',
+                                    border: 'none',
+                                    padding: '6px 14px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                  }}
+                                >
+                                  <i className={`fa-solid ${copiedCardId === card._id ? 'fa-check' : 'fa-copy'}`}></i>
+                                  {copiedCardId === card._id ? '✓ Copied!' : '📋 Copy Code'}
+                                </button>
+                              )}
+                            </div>
+
+                            <h4 style={{ fontSize: '1.05rem', margin: '4px 0 6px 0', color: '#FFFFFF', fontWeight: '800' }}>
+                              ₹{card.amount} Off Gift Card Code
                             </h4>
-                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8' }}>
                               {card.isUsed ? (
-                                <span>Used on Order #{card.orderId?.orderNumber || 'N/A'} at {new Date(card.usedAt).toLocaleDateString()}</span>
+                                <span style={{ color: '#94A3B8' }}>Used on Order #{card.orderId?.orderNumber || 'N/A'}</span>
                               ) : (
-                                <span>Expires: <strong style={{ color: isExpiredSoon ? '#d97706' : '#ef4444' }}>{new Date(card.expiryDate).toLocaleDateString()}</strong></span>
+                                <span>Expires: <strong style={{ color: isExpired ? '#F87171' : isExpiredSoon ? '#FBBF24' : '#6EE7B7' }}>{new Date(card.expiryDate).toLocaleDateString()}</strong> &bull; ⚡ Single-use per account</span>
                               )}
                             </p>
-                            
-                            {/* Simple timeline gauge */}
-                            {!card.isUsed && !isExpired && (
-                              <div style={{ marginTop: '10px' }}>
-                                <div style={{ width: '100%', background: '#e2e8f0', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                                  <div 
-                                    style={{ 
-                                      width: `${Math.max(10, Math.min(100, ((new Date(card.expiryDate) - new Date()) / (30 * 24 * 60 * 60 * 1000)) * 100))}%`, 
-                                      background: isExpiredSoon ? '#d97706' : '#22c55e', 
-                                      height: '100%' 
-                                    }}
-                                  ></div>
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           {/* Right: Badge Status */}
@@ -911,9 +1062,10 @@ export default function ProfilePage() {
                               display: 'inline-block',
                               color: statusColor,
                               background: statusBg,
+                              border: borderStyle,
                               fontSize: '0.72rem',
-                              fontWeight: 'bold',
-                              padding: '6px 12px',
+                              fontWeight: '800',
+                              padding: '6px 14px',
                               borderRadius: '20px',
                               textTransform: 'uppercase',
                               letterSpacing: '0.5px'
@@ -924,6 +1076,7 @@ export default function ProfilePage() {
                         </div>
                       );
                     })}
+
                   </div>
                 )}
               </div>
@@ -948,7 +1101,27 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <div style={{ background: '#fff8e1', border: '1px solid #ffd54f', borderRadius: '10px', padding: '16px', display: 'flex', gap: '12px', alignItems: 'flex-start', marginTop: '10px' }}>
+                <div style={{ background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: '12px', padding: '18px', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#1877F2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.2rem' }}>
+                        <i className="fa-brands fa-facebook-f"></i>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '0.92rem', color: '#1E3A8A', display: 'block' }}>Facebook Authentication System</strong>
+                        <span style={{ fontSize: '0.78rem', color: '#3B82F6' }}>Single Sign-On (SSO) Identity Provider</span>
+                      </div>
+                    </div>
+                    <span style={{ background: '#1877F2', color: '#fff', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '800' }}>
+                      ✓ Active System
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#1E40AF', lineHeight: '1.45' }}>
+                    Your account is enabled for instant 1-click login using Facebook Single Sign-On. When logging in via Facebook, your profile picture and verified email address automatically sync across all NovaKart portals.
+                  </p>
+                </div>
+
+                <div style={{ background: '#fff8e1', border: '1px solid #ffd54f', borderRadius: '10px', padding: '16px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                   <i className="fa-solid fa-circle-info" style={{ color: '#f59e0b', fontSize: '1.2rem', marginTop: '2px' }}></i>
                   <div>
                     <h5 style={{ fontWeight: '800', color: '#5d4037', margin: '0 0 4px 0' }}>Single Sign-On (SSO) Managed</h5>
@@ -960,42 +1133,7 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* TAB 3: Avatar Presets Selection */}
-            {activeTab === 'presets' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--primary-color)', marginBottom: '4px' }}>Avatar Presets</h3>
-                  <p style={{ fontSize: '0.8rem', color: '#777' }}>Choose a profile avatar preset that matches your styling preference.</p>
-                </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '10px' }}>
-                  {AVATAR_PRESETS.map((preset, index) => (
-                    <div 
-                      key={preset}
-                      onClick={() => handleSelectPresetAvatar(preset)}
-                      style={{ 
-                        position: 'relative', 
-                        aspectRatio: '1', 
-                        borderRadius: '12px', 
-                        overflow: 'hidden', 
-                        cursor: 'pointer', 
-                        border: avatar === preset ? '4px solid var(--secondary-color)' : '2px solid #eee',
-                        boxShadow: avatar === preset ? '0 4px 10px rgba(0,0,0,0.15)' : 'none',
-                        transition: 'all 0.2s',
-                        transform: avatar === preset ? 'scale(1.02)' : 'none'
-                      }}
-                    >
-                      <img src={preset} alt={`Preset ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      {avatar === preset && (
-                        <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--secondary-color)', color: '#fff', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>
-                          <i className="fa-solid fa-check"></i>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '20px', marginTop: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#999' }}>
@@ -1022,12 +1160,34 @@ export default function ProfilePage() {
               </button>
             </div>
 
+            {/* Village / Pincode Location Search Bar */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+
+              <input
+                type="text"
+                placeholder="Search Village, Mandal or Pincode (e.g. Narakoduru, 522213)"
+                value={mapSearchQuery}
+                onChange={(e) => setMapSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchLocationOnMap(); } }}
+                style={{ flex: 1, padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.82rem', background: '#F8FAFC' }}
+              />
+              <button
+                type="button"
+                onClick={handleSearchLocationOnMap}
+                disabled={searchingLocation}
+                style={{ background: '#2563EB', color: '#FFF', border: 'none', padding: '8px 14px', borderRadius: '8px', fontWeight: '700', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <i className={searchingLocation ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-magnifying-glass"}></i> Search
+              </button>
+            </div>
+
             {/* Map Canvas */}
             <div 
               ref={mapRef} 
               id="profile-map" 
-              style={{ width: '100%', height: '320px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#f8fafc', position: 'relative' }}
+              style={{ width: '100%', height: '300px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#f8fafc', position: 'relative' }}
             >
+
               {!mapLoaded && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                   <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '1.5rem', color: 'var(--secondary-color)' }}></i>

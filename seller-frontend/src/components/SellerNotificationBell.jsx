@@ -75,7 +75,11 @@ export default function SellerNotificationBell() {
   const handleClick = async (notif) => {
     if (!notif.isRead) await handleMarkRead(notif._id);
     setOpen(false);
-    if (notif.link) navigate(notif.link);
+    if (notif.orderId || notif.link) {
+      navigate('/orders');
+    } else {
+      navigate('/orders');
+    }
   };
 
   return (

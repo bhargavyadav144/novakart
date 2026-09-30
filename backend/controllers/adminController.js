@@ -417,6 +417,110 @@ export const rejectDeliveryAgent = async (req, res, next) => {
   }
 };
 
+// Approve / Reject Delivery Agent Pending Bank Details
+export const approveAgentBankUpdate = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'approve' | 'reject'
+    const agent = await DeliveryAgent.findById(id);
+
+    if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent not found' });
+    if (!agent.pendingBankDetails || agent.pendingBankDetails.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: 'No pending bank details update request found for this agent.' });
+    }
+
+    if (action === 'approve') {
+      agent.bankDetails = {
+        accountName: agent.pendingBankDetails.accountName || agent.fullName,
+        accountNumber: agent.pendingBankDetails.accountNumber,
+        bankName: agent.pendingBankDetails.bankName,
+        ifscCode: agent.pendingBankDetails.ifscCode,
+        upiId: agent.pendingBankDetails.upiId,
+        isVerified: true
+      };
+      agent.pendingBankDetails.status = 'APPROVED';
+
+      createNotification({
+        recipientId: agent.userId,
+        role: 'delivery',
+        title: '✅ Bank Payout Details Approved!',
+        message: `System Admin has approved your new bank account (${agent.bankDetails.bankName} - ${agent.bankDetails.accountNumber.slice(-4)}). Cashouts will now disburse to this account.`,
+        type: 'PAYMENT',
+        link: '/earnings'
+      });
+    } else {
+      agent.pendingBankDetails.status = 'REJECTED';
+      createNotification({
+        recipientId: agent.userId,
+        role: 'delivery',
+        title: '❌ Bank Update Request Rejected',
+        message: 'System Admin could not verify your requested bank details update. Please contact support.',
+        type: 'PAYMENT',
+        link: '/earnings'
+      });
+    }
+
+    await agent.save();
+    res.json({ success: true, message: `Bank update request ${action}d successfully.`, agent });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Credit Rider Wallet (Support / Payment Adjustment)
+export const creditRiderWallet = async (req, res, next) => {
+  try {
+    const { agentId, amount, reason, ticketId } = req.body;
+    if (!agentId || !amount) {
+      return res.status(400).json({ success: false, message: 'Please provide agentId and amount to credit.' });
+    }
+
+    const agent = await DeliveryAgent.findById(agentId);
+    if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent not found' });
+
+    const creditAmount = Number(amount);
+    if (isNaN(creditAmount) || creditAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Amount must be greater than 0.' });
+    }
+
+    if (!agent.wallet) {
+      agent.wallet = { availableBalance: 0, pendingVerificationBalance: 0, totalWithdrawn: 0 };
+    }
+    agent.wallet.availableBalance = (agent.wallet.availableBalance || 0) + creditAmount;
+    agent.totalEarnings = (agent.totalEarnings || 0) + creditAmount;
+
+    // Resolve support ticket if provided
+    if (ticketId && agent.supportTickets) {
+      const ticket = agent.supportTickets.find(t => t.ticketId === ticketId);
+      if (ticket) {
+        ticket.status = 'RESOLVED';
+        ticket.resolvedAmount = creditAmount;
+        ticket.adminNotes = reason || 'Funds credited by Admin';
+        ticket.resolvedAt = new Date();
+      }
+    }
+
+    await agent.save();
+
+    createNotification({
+      recipientId: agent.userId,
+      role: 'delivery',
+      title: `💰 Wallet Credited: +₹${creditAmount}`,
+      message: `System Admin credited ₹${creditAmount} to your wallet. Reason: ${reason || 'Support Issue Adjustment'}. Available balance: ₹${agent.wallet.availableBalance}.`,
+      type: 'PAYMENT',
+      link: '/earnings'
+    });
+
+    res.json({
+      success: true,
+      message: `✅ Successfully credited ₹${creditAmount} to ${agent.fullName}'s wallet!`,
+      wallet: agent.wallet
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const toggleBlockDeliveryAgent = async (req, res, next) => {
   try {
     const agent = await DeliveryAgent.findById(req.params.id);

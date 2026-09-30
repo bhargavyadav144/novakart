@@ -25,5 +25,8 @@
   "license": "ISC",
   "dependencies": {
     "localtunnel": "^2.0.2"
+  },
+  "devDependencies": {
+    "isomorphic-git": "^1.42.4"
   }
 }

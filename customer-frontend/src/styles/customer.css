@@ -24,6 +24,44 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: var(--font-main); background-color: var(--bg-secondary); color: var(--text-primary); line-height: 1.5; }
+
+/* Custom Permanent Scrollbars & Sticky Table Containers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #FF9900;
+  border-radius: 6px;
+  border: 2px solid #F1F5F9;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #E68A00;
+}
+
+.table-responsive,
+.table-container {
+  overflow: auto !important;
+  max-height: calc(100vh - 280px);
+  min-height: 380px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: #ffffff;
+  position: relative;
+}
+
+table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #F8FAFC !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
 a { text-decoration: none; color: inherit; }
 ul { list-style: none; }
 img { max-width: 100%; display: block; }

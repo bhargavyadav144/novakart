@@ -5,8 +5,11 @@ import warehouseApi from './services/warehouseApi';
 import WarehouseNavbar from './components/WarehouseNavbar';
 import WarehouseLogin from './pages/WarehouseLogin';
 import WarehouseDashboard from './pages/WarehouseDashboard';
+import WarehouseScanInbound from './pages/WarehouseScanInbound';
 import WarehouseInventory from './pages/WarehouseInventory';
 import WarehouseRiders from './pages/WarehouseRiders';
+import WarehouseFleetMap from './pages/WarehouseFleetMap';
+import WarehouseReturnsPage from './pages/WarehouseReturnsPage';
 import './styles/warehouse.css';
 
 function ProtectedWarehouseLayout({ children }) {
@@ -62,6 +65,14 @@ export default function App() {
             }
           />
           <Route
+            path="/scan-inbound"
+            element={
+              <ProtectedWarehouseLayout>
+                <WarehouseScanInbound />
+              </ProtectedWarehouseLayout>
+            }
+          />
+          <Route
             path="/inventory"
             element={
               <ProtectedWarehouseLayout>
@@ -74,6 +85,22 @@ export default function App() {
             element={
               <ProtectedWarehouseLayout>
                 <WarehouseRiders />
+              </ProtectedWarehouseLayout>
+            }
+          />
+          <Route
+            path="/fleet-map"
+            element={
+              <ProtectedWarehouseLayout>
+                <WarehouseFleetMap />
+              </ProtectedWarehouseLayout>
+            }
+          />
+          <Route
+            path="/returns"
+            element={
+              <ProtectedWarehouseLayout>
+                <WarehouseReturnsPage />
               </ProtectedWarehouseLayout>
             }
           />

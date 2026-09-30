@@ -2,8 +2,11 @@ import { Warehouse } from '../models/Warehouse.js';
 import { User } from '../models/User.js';
 import { Order } from '../models/Order.js';
 import { DeliveryAgent } from '../models/DeliveryAgent.js';
-import { ROLES, ORDER_STATUSES } from '../config/constants.js';
-import { emitToOrderRoom, emitToSeller, emitToUser, emitToAdmin } from '../services/socketService.js';
+import { Seller } from '../models/Seller.js';
+import { Product } from '../models/Product.js';
+import { ROLES, ORDER_STATUSES, PAYMENT_METHODS, PAYMENT_STATUSES } from '../config/constants.js';
+import { emitToOrderRoom, emitToSeller, emitToUser, emitToAdmin, emitToWarehouseFleet } from '../services/socketService.js';
+import { detectTerritoryFromCircle, REGIONAL_MANDALS } from '../utils/regionalTerritoryData.js';
 
 // Haversine distance calculator in KM
 export const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -17,6 +20,100 @@ export const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c * 10) / 10;
+};
+
+// Helper to compute active delivery destination and navigation telemetry
+const buildRiderDeliveryTelemetry = (r, warehouse, activeOrders = []) => {
+  const activeOrder = activeOrders.find(
+    o => (r.activeOrderId && o._id.toString() === r.activeOrderId.toString()) ||
+         (o.deliveryAgentId && o.deliveryAgentId.toString() === r._id.toString())
+  );
+
+  const agentLat = r.currentLocation?.lat || warehouse?.location?.lat || 16.3067;
+  const agentLng = r.currentLocation?.lng || warehouse?.location?.lng || 80.4365;
+
+  let activeDelivery = null;
+  if (activeOrder) {
+    const rawCoords = activeOrder.deliveryAddress?.coordinates;
+    const isDefaultFarCoords = !rawCoords?.lat ||
+      (Math.abs(rawCoords.lat - 28.6139) < 0.1 && Math.abs(rawCoords.lng - 77.2090) < 0.1);
+
+    const destCoords = (!isDefaultFarCoords && rawCoords?.lat && rawCoords?.lng)
+      ? rawCoords
+      : {
+          lat: (warehouse?.location?.lat || 16.3067) + 0.0145,
+          lng: (warehouse?.location?.lng || 80.4365) + 0.0210
+        };
+
+    const distKm = calculateDistanceKm(agentLat, agentLng, destCoords.lat, destCoords.lng);
+    const etaMins = Math.max(4, Math.round(distKm * 2.5));
+
+    activeDelivery = {
+      orderId: activeOrder._id,
+      orderNumber: activeOrder.orderNumber,
+      orderStatus: activeOrder.orderStatus,
+      totalAmount: activeOrder.totalAmount,
+      paymentMethod: activeOrder.paymentMethod,
+      itemsCount: activeOrder.items?.length || 1,
+      itemsSummary: (activeOrder.items || []).map(it => `${it.name || 'Product'} (x${it.quantity || 1})`).join(', '),
+      destination: {
+        recipientName: activeOrder.deliveryAddress?.fullName || 'Customer',
+        phone: activeOrder.deliveryAddress?.phone || 'N/A',
+        street: activeOrder.deliveryAddress?.street || 'Customer Doorstep Address',
+        city: activeOrder.deliveryAddress?.city || warehouse?.city || 'Guntur',
+        state: activeOrder.deliveryAddress?.state || warehouse?.state || 'AP',
+        postalCode: activeOrder.deliveryAddress?.postalCode || '522002',
+        lat: destCoords.lat,
+        lng: destCoords.lng
+      },
+      currentPosition: {
+        lat: agentLat,
+        lng: agentLng,
+        address: r.currentLocation?.address || `${warehouse?.city || 'Regional'} Hub Operations Sector`
+      },
+      distanceKm: distKm,
+      etaMinutes: etaMins,
+      statusText: activeOrder.orderStatus === 'OUT_FOR_DELIVERY' ? 'Out for Doorstep Delivery' : 'En Route with Shipment'
+    };
+  } else if (r.isOnline) {
+    const destLat = r.assignedZone?.center?.lat || (agentLat + 0.008);
+    const destLng = r.assignedZone?.center?.lng || (agentLng + 0.011);
+    const distKm = calculateDistanceKm(agentLat, agentLng, destLat, destLng);
+    activeDelivery = {
+      orderId: null,
+      orderNumber: null,
+      orderStatus: 'ON_DUTY_STANDBY',
+      statusText: `On Active Duty • Sector: ${r.assignedZone?.mandal || r.assignedZone?.zoneName || warehouse?.city || 'Operational Hub'}`,
+      destination: {
+        recipientName: `${r.assignedZone?.zoneName || 'Territory Sector'} Center`,
+        phone: '',
+        street: `Patrolling ${r.assignedZone?.mandal || 'Assigned'} Mandal Delivery Zone`,
+        city: warehouse?.city || 'Guntur',
+        state: warehouse?.state || 'AP',
+        postalCode: r.assignedZone?.pincodes?.[0] || '522001',
+        lat: destLat,
+        lng: destLng
+      },
+      currentPosition: {
+        lat: agentLat,
+        lng: agentLng,
+        address: r.currentLocation?.address || `${r.assignedZone?.mandal || warehouse?.city || 'Regional'} Delivery Zone`
+      },
+      distanceKm: distKm,
+      etaMinutes: Math.max(3, Math.round(distKm * 2.5))
+    };
+  }
+
+  return {
+    currentLocation: {
+      lat: agentLat,
+      lng: agentLng,
+      address: r.currentLocation?.address || `${warehouse?.city || 'Hub'} Area`
+    },
+    activeDelivery,
+    isOnDuty: r.isOnline || !!activeDelivery,
+    activeOrdersCount: r.activeOrderIds?.length || (r.activeOrderId ? 1 : (activeDelivery?.orderId ? 1 : 0))
+  };
 };
 
 // @desc    Get all warehouses with optional state/type/search filtering
@@ -206,28 +303,32 @@ export const getWarehouseShipments = async (req, res) => {
     }
 
     const { stage, search } = req.query;
-    const filter = {
-      $or: [
-        { 'logisticsRoute.originWarehouse': warehouse._id },
-        { 'logisticsRoute.destinationBranch': warehouse._id }
-      ]
-    };
+    let filter = {};
 
-    if (stage && stage !== 'ALL') {
-      filter['logisticsRoute.transitStage'] = stage;
-    }
+    if (search && search.trim()) {
+      const cleanSearch = search.trim().replace(/^#/, '');
+      filter = {
+        $or: [
+          { orderNumber: { $regex: cleanSearch, $options: 'i' } },
+          { 'deliveryAddress.fullName': { $regex: cleanSearch, $options: 'i' } },
+          { 'deliveryAddress.city': { $regex: cleanSearch, $options: 'i' } },
+          { 'items.name': { $regex: cleanSearch, $options: 'i' } }
+        ]
+      };
+    } else {
+      filter = {
+        $or: [
+          { 'logisticsRoute.originWarehouse': warehouse._id },
+          { 'logisticsRoute.destinationBranch': warehouse._id },
+          { 'deliveryAddress.pincode': warehouse.pincode },
+          { 'deliveryAddress.city': { $regex: warehouse.city || 'Guntur', $options: 'i' } },
+          { orderStatus: { $in: ['PENDING', 'ACCEPTED', 'SELLER_ACCEPTED', 'DISPATCHED_TO_HUB', 'IN_TRANSIT', 'AT_DELIVERY_BRANCH', 'OUT_FOR_DELIVERY', 'DELIVERED'] } }
+        ]
+      };
 
-    if (search) {
-      filter.$and = [
-        {
-          $or: [
-            { orderNumber: { $regex: search, $options: 'i' } },
-            { 'deliveryAddress.fullName': { $regex: search, $options: 'i' } },
-            { 'deliveryAddress.city': { $regex: search, $options: 'i' } },
-            { 'items.name': { $regex: search, $options: 'i' } }
-          ]
-        }
-      ];
+      if (stage && stage !== 'ALL') {
+        filter['logisticsRoute.transitStage'] = stage;
+      }
     }
 
     const orders = await Order.find(filter)
@@ -251,7 +352,7 @@ export const getWarehouseShipments = async (req, res) => {
   }
 };
 
-// @desc    Advance Shipment Transit Stage (Received, In Transit, At Branch, Out for Delivery)
+// @desc    Advance Shipment Transit Stage & Auto-Attach Facility (Received, In Transit, At Branch, Out for Delivery)
 // @route   PUT /api/warehouses/my-warehouse/shipments/:orderId/stage
 // @access  Private (Warehouse Manager / Admin)
 export const updateShipmentStage = async (req, res) => {
@@ -273,21 +374,68 @@ export const updateShipmentStage = async (req, res) => {
       return res.status(400).json({ success: false, message: `Invalid transit stage: ${stage}` });
     }
 
-    const order = await Order.findById(orderId)
+    let warehouse = await Warehouse.findOne({
+      $or: [
+        { 'manager.userId': req.user._id },
+        { 'manager.email': req.user.email?.toLowerCase().trim() }
+      ]
+    });
+    if (!warehouse) {
+      warehouse = await Warehouse.findOne({ status: 'active' });
+    }
+
+    const cleanId = String(orderId).trim().replace(/^#/, '');
+
+    // Search by ObjectId OR orderNumber regex
+    let order = await Order.findOne({
+      $or: [
+        { _id: mongoose.Types.ObjectId.isValid(cleanId) ? cleanId : null },
+        { orderNumber: orderId },
+        { orderNumber: cleanId },
+        { orderNumber: { $regex: cleanId, $options: 'i' } }
+      ]
+    })
       .populate('logisticsRoute.originWarehouse')
       .populate('logisticsRoute.destinationBranch');
 
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+      return res.status(404).json({ success: false, message: `Order '${orderId}' not found in database.` });
     }
 
     if (!order.logisticsRoute) {
       order.logisticsRoute = {};
     }
 
+    // Auto-attach warehouse facility to order's logistics route
+    if (warehouse) {
+      if (!order.logisticsRoute.originWarehouse) {
+        order.logisticsRoute.originWarehouse = warehouse._id;
+      }
+      if (['AT_DELIVERY_BRANCH', 'OUT_FOR_DELIVERY', 'IN_TRANSIT_TO_BRANCH'].includes(stage)) {
+        order.logisticsRoute.destinationBranch = warehouse._id;
+      }
+    }
+
+    // Calculate 9:00 AM Delivery Cutoff & Rider Dispatch Batch
+    const now = new Date();
+    const currentHour = now.getHours(); // 0 to 23
+    const isBefore9AM = currentHour < 9;
+
+    const cutoffNotice = isBefore9AM
+      ? `⚡ SAME-DAY DELIVERY (Scanned & Received Before 9:00 AM Cutoff) — Assigned for Today's 9:00 AM Rider Delivery Route.`
+      : `📦 NEXT-DAY DELIVERY BATCH (Arrived After 9:00 AM Cutoff) — Scheduled for Tomorrow Morning's 9:00 AM Rider Dispatch Batch.`;
+
     order.logisticsRoute.transitStage = stage;
+    order.logisticsRoute.deliverySchedule = {
+      isBefore9AM,
+      scannedAt: now,
+      targetDeliveryDay: isBefore9AM ? 'TODAY' : 'TOMORROW',
+      dispatchBatchTime: isBefore9AM ? '9:00 AM Today' : '9:00 AM Tomorrow',
+      noticeText: cutoffNotice
+    };
+
     if (notes) {
-      order.logisticsRoute.notes = notes;
+      order.logisticsRoute.notes = `${notes} | ${cutoffNotice}`;
     }
 
     // Sync root orderStatus for customer/delivery portals
@@ -299,8 +447,8 @@ export const updateShipmentStage = async (req, res) => {
 
     order.timeline.push({
       status: `LOGISTICS_${stage}`,
-      timestamp: new Date(),
-      note: notes || `Shipment advanced to ${stage.replace(/_/g, ' ')} by facility manager`,
+      timestamp: now,
+      note: notes ? `${notes} (${cutoffNotice})` : `Shipment advanced to ${stage.replace(/_/g, ' ')} by facility manager. ${cutoffNotice}`,
       updatedBy: req.user.name || 'Warehouse Manager'
     });
 
@@ -311,15 +459,25 @@ export const updateShipmentStage = async (req, res) => {
       orderId: order._id,
       stage,
       status: order.orderStatus,
+      deliverySchedule: order.logisticsRoute.deliverySchedule,
       message: `Logistics status updated to ${stage.replace(/_/g, ' ')}`
     });
     emitToSeller(order.sellerId, 'seller_order_update', { orderId: order._id, stage });
-    emitToUser(order.customerId, 'order_status_update', { orderId: order._id, stage });
+    emitToUser(order.customerId, 'order_status_update', { orderId: order._id, stage, deliverySchedule: order.logisticsRoute.deliverySchedule });
     emitToAdmin('admin_order_update', { orderId: order._id, stage });
+    if (order.logisticsRoute.destinationBranch?._id) {
+      emitToWarehouseFleet(order.logisticsRoute.destinationBranch._id, 'warehouse_package_scanned', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        stage,
+        deliverySchedule: order.logisticsRoute.deliverySchedule
+      });
+    }
 
     res.json({
       success: true,
-      message: `Shipment stage successfully updated to ${stage}`,
+      message: `Shipment stage successfully updated to ${stage}. ${cutoffNotice}`,
+      deliverySchedule: order.logisticsRoute.deliverySchedule,
       order
     });
   } catch (error) {
@@ -504,31 +662,49 @@ export const getWarehouseRiders = async (req, res) => {
       }
     }
 
-    // Never return password hashes!
-    const sanitized = riders.map(r => ({
-      _id: r._id,
-      userId: r.userId?._id,
-      fullName: r.fullName,
-      email: r.email,
-      phone: r.phone,
-      address: r.address,
-      vehicleType: r.vehicleType,
-      vehicleNumber: r.vehicleNumber,
-      drivingLicense: r.drivingLicense,
-      profileImage: r.profileImage || r.userId?.avatar,
-      isApproved: r.isApproved,
-      status: r.status,
-      isOnline: r.isOnline,
-      isAvailable: r.isAvailable,
-      todayDeliveries: r.todayDeliveries,
-      completedDeliveries: r.completedDeliveries,
-      totalEarnings: r.totalEarnings,
-      maxConcurrentOrders: r.maxConcurrentOrders,
-      assignedWarehouse: r.assignedWarehouse,
-      mustChangePassword: r.mustChangePassword || r.userId?.mustChangePassword || false,
-      emergencyContact: r.emergencyContact,
-      createdAt: r.createdAt
-    }));
+    // Find active orders for riders in this warehouse to track on-duty destinations
+    const riderIds = riders.map(r => r._id);
+    const activeOrders = await Order.find({
+      $or: [
+        { deliveryAgentId: { $in: riderIds }, orderStatus: { $in: ['OUT_FOR_DELIVERY', 'PICKED_UP', 'ACCEPTED', 'CONFIRMED'] } },
+        { _id: { $in: riders.map(r => r.activeOrderId).filter(Boolean) } }
+      ]
+    }).select('orderNumber orderStatus deliveryAddress totalAmount paymentMethod items customerId createdAt deliveryAgentId');
+
+    // Return rich sanitized rider profiles with assigned territory, live coordinates & active destination
+    const sanitized = riders.map(r => {
+      const telemetry = buildRiderDeliveryTelemetry(r, warehouse, activeOrders);
+
+      return {
+        _id: r._id,
+        userId: r.userId?._id,
+        fullName: r.fullName,
+        email: r.email,
+        phone: r.phone,
+        address: r.address,
+        vehicleType: r.vehicleType,
+        vehicleNumber: r.vehicleNumber,
+        drivingLicense: r.drivingLicense,
+        profileImage: r.profileImage || r.userId?.avatar,
+        isApproved: r.isApproved,
+        status: r.status,
+        isOnline: r.isOnline,
+        isAvailable: r.isAvailable,
+        todayDeliveries: r.todayDeliveries,
+        completedDeliveries: r.completedDeliveries,
+        totalEarnings: r.totalEarnings,
+        maxConcurrentOrders: r.maxConcurrentOrders,
+        assignedWarehouse: r.assignedWarehouse,
+        mustChangePassword: r.mustChangePassword || r.userId?.mustChangePassword || false,
+        emergencyContact: r.emergencyContact,
+        createdAt: r.createdAt,
+        currentLocation: telemetry.currentLocation,
+        assignedZone: r.assignedZone || null,
+        activeDelivery: telemetry.activeDelivery,
+        isOnDuty: telemetry.isOnDuty,
+        activeOrdersCount: telemetry.activeOrdersCount
+      };
+    });
 
     res.json({
       success: true,
@@ -808,4 +984,717 @@ export const getWarehouseCredentials = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch warehouse credentials' });
   }
 };
+
+// @desc    Admin: Update Warehouse Coverage Territory / Service Area (Pincodes & Radius)
+// @route   PUT /api/warehouses/:id/service-area
+// @access  Admin
+export const updateWarehouseServiceArea = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pincodes, center, radiusKm, color } = req.body;
+
+    const warehouse = await Warehouse.findById(id);
+    if (!warehouse) {
+      return res.status(404).json({ success: false, message: 'Warehouse not found' });
+    }
+
+    warehouse.serviceArea = {
+      pincodes: Array.isArray(pincodes) ? pincodes.map(p => String(p).trim()).filter(Boolean) : (warehouse.serviceArea?.pincodes || []),
+      center: {
+        lat: center?.lat !== undefined ? parseFloat(center.lat) : (warehouse.serviceArea?.center?.lat || warehouse.location.lat),
+        lng: center?.lng !== undefined ? parseFloat(center.lng) : (warehouse.serviceArea?.center?.lng || warehouse.location.lng)
+      },
+      radiusKm: radiusKm !== undefined ? Number(radiusKm) : (warehouse.serviceArea?.radiusKm || 15),
+      color: color || warehouse.serviceArea?.color || '#2563EB',
+      markedByAdmin: true,
+      updatedAt: new Date()
+    };
+
+    await warehouse.save();
+
+    res.json({
+      success: true,
+      message: `✅ Warehouse coverage territory updated for ${warehouse.name}!`,
+      serviceArea: warehouse.serviceArea
+    });
+  } catch (error) {
+    console.error('Error updating warehouse service area:', error);
+    res.status(500).json({ success: false, message: 'Failed to update warehouse service area' });
+  }
+};
+
+// @desc    Warehouse Manager: Get Delivery Territory Zones & Active Fleet for Map
+// @route   GET /api/warehouses/my-warehouse/zones
+// @access  Warehouse Manager
+export const getWarehouseZones = async (req, res) => {
+  try {
+    const managerEmail = (req.user.email || '').toLowerCase().trim();
+    const warehouse = await Warehouse.findOne({
+      $or: [
+        { 'manager.userId': req.user._id },
+        { 'manager.email': managerEmail }
+      ]
+    });
+
+    if (!warehouse) {
+      return res.status(404).json({ success: false, message: 'Manager warehouse not found' });
+    }
+
+    // Default sample zones if none created yet and not initialized
+    if ((!warehouse.deliveryZones || warehouse.deliveryZones.length === 0) && !warehouse.isZonesInitialized) {
+      const wLat = warehouse.location?.lat || 16.3067;
+      const wLng = warehouse.location?.lng || 80.4365;
+
+      warehouse.deliveryZones = [
+        {
+          zoneId: 'ZONE-ETUKURU',
+          zoneName: 'Etukuru Urban Corridor',
+          pincodes: ['522017', '522003'],
+          center: { lat: wLat - 0.025, lng: wLng + 0.035 },
+          radiusKm: 4.5,
+          color: '#10B981', // Emerald Green
+          assignedAgentIds: []
+        },
+        {
+          zoneId: 'ZONE-BUDAMPADU',
+          zoneName: 'Budampadu Highway Sector',
+          pincodes: ['522018', '522005'],
+          center: { lat: wLat - 0.065, lng: wLng + 0.025 },
+          radiusKm: 5.5,
+          color: '#F59E0B', // Amber
+          assignedAgentIds: []
+        },
+        {
+          zoneId: 'ZONE-CENTRAL',
+          zoneName: 'City Central & Station Sector',
+          pincodes: ['522001', '522002'],
+          center: { lat: wLat + 0.015, lng: wLng - 0.015 },
+          radiusKm: 3.5,
+          color: '#8B5CF6', // Purple
+          assignedAgentIds: []
+        }
+      ];
+      warehouse.isZonesInitialized = true;
+      await warehouse.save();
+    }
+
+    // Fetch all delivery agents registered under this warehouse (or nearby)
+    const riders = await DeliveryAgent.find({
+      $or: [
+        { assignedWarehouse: warehouse._id },
+        { 'assignedRoute.startWarehouseName': warehouse.name },
+        { status: 'approved' }
+      ]
+    }).populate('userId', 'name email isOnline isBlocked');
+
+    // Fetch active orders for these riders to track where on-duty riders are going
+    const riderIds = riders.map(r => r._id);
+    const activeOrders = await Order.find({
+      $or: [
+        { deliveryAgentId: { $in: riderIds }, orderStatus: { $in: ['OUT_FOR_DELIVERY', 'PICKED_UP', 'ACCEPTED', 'CONFIRMED'] } },
+        { _id: { $in: riders.map(r => r.activeOrderId).filter(Boolean) } }
+      ]
+    }).select('orderNumber orderStatus deliveryAddress totalAmount paymentMethod items customerId createdAt deliveryAgentId');
+
+    res.json({
+      success: true,
+      warehouse: {
+        _id: warehouse._id,
+        name: warehouse.name,
+        code: warehouse.code,
+        city: warehouse.city,
+        state: warehouse.state,
+        location: warehouse.location,
+        serviceArea: warehouse.serviceArea || {
+          pincodes: [warehouse.pincode, '522017', '522018', '522001'],
+          center: warehouse.location,
+          radiusKm: 15,
+          color: '#2563EB'
+        }
+      },
+      zones: warehouse.deliveryZones || [],
+      riders: riders.map(r => {
+        const telemetry = buildRiderDeliveryTelemetry(r, warehouse, activeOrders);
+        return {
+          _id: r._id,
+          fullName: r.fullName,
+          phone: r.phone,
+          email: r.email,
+          vehicleType: r.vehicleType,
+          vehicleNumber: r.vehicleNumber,
+          isOnline: r.isOnline,
+          status: r.status,
+          currentLocation: telemetry.currentLocation,
+          assignedZone: r.assignedZone,
+          assignedZones: r.assignedZones && r.assignedZones.length > 0 ? r.assignedZones : (r.assignedZone?.mandal ? [r.assignedZone] : []),
+          activeOrdersCount: telemetry.activeOrdersCount,
+          activeDelivery: telemetry.activeDelivery,
+          isOnDuty: telemetry.isOnDuty,
+          todayDeliveries: r.todayDeliveries,
+          completedDeliveries: r.completedDeliveries
+        };
+      })
+    });
+  } catch (error) {
+    console.error('Error fetching warehouse zones:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch warehouse zones' });
+  }
+};
+
+// @desc    Warehouse Manager: Create or Update Territory Zone on Map with Color & Assigned Riders
+// @route   POST /api/warehouses/my-warehouse/zones
+// @access  Warehouse Manager
+export const createOrUpdateWarehouseZone = async (req, res) => {
+  try {
+    const managerEmail = (req.user.email || '').toLowerCase().trim();
+    const warehouse = await Warehouse.findOne({
+      $or: [
+        { 'manager.userId': req.user._id },
+        { 'manager.email': managerEmail }
+      ]
+    });
+
+    if (!warehouse) {
+      return res.status(404).json({ success: false, message: 'Manager warehouse not found' });
+    }
+
+    const { zoneId, zoneName, mandal, pincodes, center, radiusKm, color, assignedAgentIds } = req.body;
+
+    if (!zoneName) {
+      return res.status(400).json({ success: false, message: 'Zone name is required.' });
+    }
+
+    const cleanPincodes = Array.isArray(pincodes)
+      ? pincodes.map(p => String(p).trim()).filter(Boolean)
+      : (typeof pincodes === 'string' ? pincodes.split(',').map(p => p.trim()).filter(Boolean) : []);
+
+    const cleanMandal = (mandal || '').trim();
+    const targetZoneId = zoneId || `ZONE-${Date.now().toString().slice(-6)}`;
+    const zoneColor = color || '#10B981';
+    const zoneRadius = radiusKm ? Math.min(Math.max(1, Number(radiusKm)), 100) : 5;
+    const zoneCenter = {
+      lat: center?.lat ? parseFloat(center.lat) : warehouse.location.lat,
+      lng: center?.lng ? parseFloat(center.lng) : warehouse.location.lng
+    };
+    const validAgentIds = Array.isArray(assignedAgentIds) ? assignedAgentIds : [];
+
+    const existingIndex = (warehouse.deliveryZones || []).findIndex(z => z.zoneId === targetZoneId);
+
+    const zoneObj = {
+      zoneId: targetZoneId,
+      zoneName: zoneName.trim(),
+      mandal: cleanMandal,
+      pincodes: cleanPincodes,
+      center: zoneCenter,
+      radiusKm: zoneRadius,
+      color: zoneColor,
+      assignedAgentIds: validAgentIds,
+      updatedAt: new Date()
+    };
+
+    if (existingIndex >= 0) {
+      warehouse.deliveryZones[existingIndex] = { ...warehouse.deliveryZones[existingIndex], ...zoneObj };
+    } else {
+      warehouse.deliveryZones.push(zoneObj);
+    }
+
+    warehouse.isZonesInitialized = true;
+    await warehouse.save();
+
+    // Sync assignedZone to all assigned delivery agents (with multi-pincodes and mandal)
+    if (validAgentIds.length > 0) {
+      await DeliveryAgent.updateMany(
+        { _id: { $in: validAgentIds } },
+        {
+          assignedWarehouse: warehouse._id,
+          assignedZone: {
+            zoneId: targetZoneId,
+            zoneName: zoneName.trim(),
+            mandal: cleanMandal,
+            pincodes: cleanPincodes,
+            center: zoneCenter,
+            radiusKm: zoneRadius,
+            color: zoneColor,
+            assignedByWarehouseManager: req.user._id,
+            assignedAt: new Date()
+          }
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `✅ Territory Zone "${zoneName}" ${cleanMandal ? `(Mandal: ${cleanMandal})` : ''} with ${cleanPincodes.length} pincodes configured successfully for ${validAgentIds.length} assigned rider(s)!`,
+      zone: zoneObj,
+      zones: warehouse.deliveryZones
+    });
+  } catch (error) {
+    console.error('Error saving warehouse zone:', error);
+    res.status(500).json({ success: false, message: 'Failed to configure territory zone' });
+  }
+};
+
+// @desc    Warehouse Manager: Delete Territory Zone
+// @route   DELETE /api/warehouses/my-warehouse/zones/:zoneId
+// @access  Warehouse Manager
+export const deleteWarehouseZone = async (req, res) => {
+  try {
+    const { zoneId } = req.params;
+    const managerEmail = (req.user.email || '').toLowerCase().trim();
+    const warehouse = await Warehouse.findOne({
+      $or: [
+        { 'manager.userId': req.user._id },
+        { 'manager.email': managerEmail }
+      ]
+    });
+
+    if (!warehouse) {
+      return res.status(404).json({ success: false, message: 'Manager warehouse not found' });
+    }
+
+    warehouse.deliveryZones = (warehouse.deliveryZones || []).filter(
+      z => z.zoneId !== zoneId && z._id?.toString() !== zoneId
+    );
+    warehouse.isZonesInitialized = true;
+    await warehouse.save();
+
+    await DeliveryAgent.updateMany(
+      { $or: [{ 'assignedZone.zoneId': zoneId }, { 'assignedZone._id': zoneId }] },
+      { $unset: { assignedZone: 1 } }
+    );
+
+
+    res.json({
+      success: true,
+      message: 'Territory zone deleted successfully',
+      zones: warehouse.deliveryZones
+    });
+  } catch (error) {
+    console.error('Error deleting warehouse zone:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete territory zone' });
+  }
+};
+
+// @desc    Warehouse Manager: Directly Assign Rider to 1 or N Mandal Territory Zones
+// @route   PUT /api/warehouses/my-warehouse/riders/:agentId/assign-zone
+// @access  Warehouse Manager
+export const assignRiderToZone = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    let { zones, zoneId, zoneName, mandal, pincodes, center, radiusKm, color } = req.body;
+
+    const agent = await DeliveryAgent.findById(agentId);
+    if (!agent) {
+      return res.status(404).json({ success: false, message: 'Delivery agent not found' });
+    }
+
+    // Determine list of input zones (N mandals)
+    let inputZonesList = [];
+    if (Array.isArray(zones) && zones.length > 0) {
+      inputZonesList = zones;
+    } else {
+      inputZonesList = [{ zoneId, zoneName, mandal, pincodes, center, radiusKm, color }];
+    }
+
+    const cleanZones = inputZonesList.map((z, idx) => {
+      const zPincodes = Array.isArray(z.pincodes)
+        ? z.pincodes.map(p => String(p).trim()).filter(Boolean)
+        : (typeof z.pincodes === 'string' ? z.pincodes.split(',').map(s => s.trim()).filter(Boolean) : []);
+      const zMandal = (z.mandal || '').trim();
+      const zZoneId = z.zoneId || `ZONE-${Date.now().toString().slice(-6)}-${idx}`;
+      const zColor = z.color || '#10B981';
+      const zRadius = z.radiusKm ? Math.min(Math.max(1, Number(z.radiusKm)), 100) : 5;
+      const zCenter = {
+        lat: z.center?.lat ? parseFloat(z.center.lat) : 16.3067,
+        lng: z.center?.lng ? parseFloat(z.center.lng) : 80.4365
+      };
+      return {
+        zoneId: zZoneId,
+        zoneName: z.zoneName || (zMandal ? `${zMandal} Sector` : 'Assigned Territory'),
+        mandal: zMandal,
+        pincodes: zPincodes,
+        center: zCenter,
+        radiusKm: zRadius,
+        color: zColor,
+        assignedByWarehouseManager: req.user._id,
+        assignedAt: new Date()
+      };
+    });
+
+    // Save assignedZones (array of N mandals) and primary assignedZone
+    agent.assignedZones = cleanZones;
+    agent.assignedZone = cleanZones[0];
+
+    // Combine all pincodes & mandal names across N assigned mandals
+    const allPincodes = Array.from(new Set(cleanZones.flatMap(z => z.pincodes)));
+    const allMandals = Array.from(new Set(cleanZones.map(z => z.mandal).filter(Boolean)));
+    const primaryMandal = cleanZones[0]?.mandal || 'Hub Operational Area';
+
+    // Retrieve warehouse facility
+    let warehouse = null;
+    if (req.user.warehouseId) {
+      warehouse = await Warehouse.findById(req.user.warehouseId);
+    } else if (agent.assignedWarehouse) {
+      warehouse = await Warehouse.findById(agent.assignedWarehouse);
+    }
+
+    // Realign active orders matching ANY of the N assigned mandals or pincodes
+    await Order.updateMany(
+      {
+        deliveryAgentId: agent._id,
+        orderStatus: { $in: [ORDER_STATUSES.AGENT_ASSIGNED, ORDER_STATUSES.PICKED_UP, ORDER_STATUSES.OUT_FOR_DELIVERY] },
+        'deliveryAddress.postalCode': { $nin: allPincodes },
+        'deliveryAddress.city': { $nin: allMandals }
+      },
+      {
+        deliveryAgentId: null,
+        orderStatus: ORDER_STATUSES.SELLER_ACCEPTED
+      }
+    );
+
+    let matchingOrders = await Order.find({
+      $or: [
+        { deliveryAgentId: agent._id, orderStatus: { $in: [ORDER_STATUSES.AGENT_ASSIGNED, ORDER_STATUSES.PICKED_UP, ORDER_STATUSES.OUT_FOR_DELIVERY] } },
+        { 'deliveryAddress.postalCode': { $in: allPincodes }, deliveryAgentId: null },
+        { 'deliveryAddress.city': { $in: allMandals }, deliveryAgentId: null }
+      ]
+    }).limit(5);
+
+    for (const ord of matchingOrders) {
+      ord.deliveryAgentId = agent._id;
+      ord.orderStatus = ORDER_STATUSES.OUT_FOR_DELIVERY;
+      await ord.save();
+    }
+
+    agent.activeOrderIds = matchingOrders.map(o => o._id);
+    agent.activeOrderId = matchingOrders[0]?._id || null;
+
+    // Update assigned route
+    const totalCoverageRadius = Math.round(cleanZones.reduce((sum, z) => sum + z.radiusKm, 0));
+    agent.assignedRoute = {
+      routeName: `${primaryMandal} & ${cleanZones.length - 1 > 0 ? `${cleanZones.length - 1} Adjacent Mandals` : 'Corridor'}`,
+      routeTitle: `Multi-Mandal Delivery Route (${cleanZones.length} Mandals Assigned)`,
+      startWarehouseName: warehouse ? warehouse.name : 'District Logistics Hub',
+      startPincode: allPincodes[0] || '522001',
+      endPincode: allPincodes[allPincodes.length - 1] || '522019',
+      endVillageName: `${cleanZones[cleanZones.length - 1]?.mandal || 'Sector'} Sector Stop`,
+      corridorRadiusKm: totalCoverageRadius,
+      assignedByWarehouseManager: req.user.name || 'Warehouse Manager',
+      assignedAt: new Date(),
+      startCoordinates: warehouse?.location || { lat: 16.3067, lng: 80.4365 },
+      endCoordinates: cleanZones[cleanZones.length - 1]?.center || { lat: 16.3067, lng: 80.4365 },
+      totalStops: matchingOrders.length,
+      stops: matchingOrders.map((ord, idx) => ({
+        stopIndex: idx + 1,
+        orderId: ord._id,
+        orderNumber: ord.orderNumber,
+        recipientName: ord.deliveryAddress?.fullName || `Customer ${idx + 1}`,
+        areaName: ord.deliveryAddress?.city || primaryMandal,
+        street: ord.deliveryAddress?.street,
+        pincode: ord.deliveryAddress?.postalCode,
+        coordinates: ord.deliveryAddress?.coordinates || cleanZones[0].center,
+        status: ord.orderStatus
+      }))
+    };
+
+    await agent.save();
+
+    // Link agent to all N zones inside warehouse.deliveryZones
+    if (warehouse) {
+      if (!warehouse.deliveryZones) warehouse.deliveryZones = [];
+      cleanZones.forEach(z => {
+        const zIndex = warehouse.deliveryZones.findIndex(wz => wz.zoneId === z.zoneId || (wz.mandal && wz.mandal.toLowerCase() === z.mandal.toLowerCase()));
+        if (zIndex >= 0) {
+          if (!warehouse.deliveryZones[zIndex].assignedAgentIds) warehouse.deliveryZones[zIndex].assignedAgentIds = [];
+          if (!warehouse.deliveryZones[zIndex].assignedAgentIds.includes(agent._id)) {
+            warehouse.deliveryZones[zIndex].assignedAgentIds.push(agent._id);
+          }
+        } else {
+          warehouse.deliveryZones.push({
+            ...z,
+            assignedAgentIds: [agent._id]
+          });
+        }
+      });
+      await warehouse.save();
+
+      // Emit real-time notification to warehouse fleet radar & agent
+      emitToWarehouseFleet(warehouse._id, 'warehouse_zone_updated', {
+        agentId: agent._id,
+        zone: agent.assignedZone,
+        route: agent.assignedRoute
+      });
+    }
+
+    // Broadcast instant update to rider app (orders list & route map)
+    if (agent.userId) {
+      emitToUser(agent.userId, 'agent_zone_assigned', {
+        zone: agent.assignedZone,
+        route: agent.assignedRoute
+      });
+      emitToUser(agent.userId, 'route_updated', {
+        zone: agent.assignedZone,
+        route: agent.assignedRoute
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `✅ Rider ${agent.fullName} assigned to ${cleanZones.length} Mandal(s) (${allMandals.join(', ')})!`,
+      assignedZone: agent.assignedZone,
+      assignedZones: agent.assignedZones,
+      preferredPincodes: agent.preferredPincodes,
+      agent
+    });
+  } catch (error) {
+    console.error('Error assigning rider to multiple mandal zones:', error);
+    res.status(500).json({ success: false, message: 'Failed to assign mandal zones to rider' });
+  }
+};
+
+// @desc    Get Order Demand & Volume by Mandal for Dynamic Territory Expansion
+// @route   GET /api/warehouses/my-warehouse/mandal-demand
+// @access  Private (Warehouse Manager)
+export const getMandalOrderDemand = async (req, res) => {
+  try {
+    const unassignedOrders = await Order.find({
+      orderStatus: { $in: [ORDER_STATUSES.PENDING, ORDER_STATUSES.SELLER_ACCEPTED, ORDER_STATUSES.DELIVERY_REQUESTED, 'AT_STORE'] },
+      deliveryAgentId: null
+    }).select('deliveryAddress items totalAmount orderNumber');
+
+    const demandMap = {};
+    unassignedOrders.forEach(ord => {
+      const city = (ord.deliveryAddress?.city || 'Unassigned Sector').trim();
+      const pin = (ord.deliveryAddress?.postalCode || '').trim();
+
+      if (!demandMap[city]) {
+        demandMap[city] = {
+          mandal: city,
+          orderCount: 0,
+          pincodes: new Set(),
+          totalValue: 0
+        };
+      }
+      demandMap[city].orderCount += 1;
+      if (pin) demandMap[city].pincodes.add(pin);
+      demandMap[city].totalValue += ord.totalAmount || 0;
+    });
+
+    const mandalDemand = Object.values(demandMap).map(d => ({
+      mandal: d.mandal,
+      orderCount: d.orderCount,
+      pincodes: Array.from(d.pincodes),
+      totalValue: Math.round(d.totalValue)
+    })).sort((a, b) => b.orderCount - a.orderCount);
+
+    res.json({
+      success: true,
+      count: mandalDemand.length,
+      mandalDemand
+    });
+  } catch (error) {
+    console.error('Error fetching mandal order demand:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch mandal order demand' });
+  }
+};
+
+// @desc    Auto-detect & Verify Mandals and Pincodes from Mouse-drawn Circle on Map
+// @route   POST /api/warehouses/my-warehouse/detect-area-pincodes
+// @access  Private (Warehouse Manager)
+export const detectAreaPincodesAndMandal = async (req, res) => {
+  try {
+    const { center, radiusKm, lat, lng } = req.body;
+    const targetLat = center?.lat !== undefined ? parseFloat(center.lat) : (lat !== undefined ? parseFloat(lat) : null);
+    const targetLng = center?.lng !== undefined ? parseFloat(center.lng) : (lng !== undefined ? parseFloat(lng) : null);
+
+    if (targetLat === null || targetLng === null || isNaN(targetLat) || isNaN(targetLng)) {
+      return res.status(400).json({ success: false, message: 'Valid center coordinates (lat, lng) are required.' });
+    }
+
+    const clampedRadius = Math.min(Math.max(1, parseFloat(radiusKm) || 5.5), 100);
+    const detected = detectTerritoryFromCircle(targetLat, targetLng, clampedRadius);
+
+    try {
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&addressdetails=1`,
+        { headers: { 'User-Agent': 'SmartCart-Warehouse/1.0' }, signal: AbortSignal.timeout(3000) }
+      );
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        const address = geoData.address || {};
+        const realPin = address.postcode;
+        const realMandal = address.subdistrict || address.county || address.village || address.town || address.city;
+
+        if (realPin && /^\d{6}$/.test(realPin.trim())) {
+          const pin = realPin.trim();
+          if (!detected.autoVerifiedPincodes.includes(pin)) {
+            detected.autoVerifiedPincodes.unshift(pin);
+          }
+        }
+        if (realMandal && detected.primaryMandal === 'Guntur Urban' && targetLat > 16.32 && targetLng < 80.38) {
+          detected.primaryMandal = realMandal;
+          detected.zoneName = `${realMandal} Sector`;
+        }
+      }
+    } catch (geoErr) {
+      console.log('Live reverse-geocode fallback triggered:', geoErr.message);
+    }
+
+    res.json(detected);
+  } catch (error) {
+    console.error('Error detecting area pincodes:', error);
+    res.status(500).json({ success: false, message: 'Failed to auto-verify area territory.' });
+  }
+};
+
+// @desc    Check Delivery Serviceability & Maintenance Status for Customer Address / Pincode
+// Helper: Resolve Warehouse & Mandal strictly for a target Pincode / Address
+export const findServiceWarehouseForPincode = async (cleanPin, city = '', lat = null, lng = null) => {
+  const allWarehouses = await Warehouse.find({});
+  if (!allWarehouses || allWarehouses.length === 0) {
+    return { warehouse: null, mandal: null };
+  }
+
+  let matchedWarehouse = null;
+  let matchedMandal = null;
+
+  if (cleanPin && String(cleanPin).trim().length >= 5) {
+    const pin = String(cleanPin).trim();
+
+    // 1. Direct match on Warehouse pincode or serviceArea / deliveryZones
+    matchedWarehouse = allWarehouses.find(w =>
+      w.pincode === pin ||
+      w.serviceArea?.pincodes?.includes(pin) ||
+      (w.deliveryZones && w.deliveryZones.some(z => z.pincodes && z.pincodes.includes(pin)))
+    );
+
+    // 2. Check active DeliveryAgents for assigned/preferred pincodes
+    if (!matchedWarehouse) {
+      const activeAgents = await DeliveryAgent.find({
+        $or: [{ agentPincodes: pin }, { preferredPincodes: pin }]
+      });
+      if (activeAgents.length > 0 && activeAgents[0].assignedHub) {
+        matchedWarehouse = allWarehouses.find(w =>
+          w.name === activeAgents[0].assignedHub || w.city.toLowerCase() === activeAgents[0].assignedHub.toLowerCase()
+        );
+      }
+    }
+
+    // 3. Match via REGIONAL_MANDALS dataset
+    if (!matchedWarehouse) {
+      const regionalMandal = REGIONAL_MANDALS.find(m => m.pincodes && m.pincodes.includes(pin));
+      if (regionalMandal) {
+        matchedMandal = regionalMandal;
+        const dName = regionalMandal.district.toLowerCase();
+        matchedWarehouse = allWarehouses.find(w =>
+          w.city.toLowerCase().includes(dName) ||
+          w.name.toLowerCase().includes(dName) ||
+          dName.includes(w.city.toLowerCase())
+        );
+      }
+    }
+
+    // 4. Match via standard regional postal prefix (50xxxx, 51xxxx, 52xxxx, 53xxxx)
+    if (!matchedWarehouse && /^(50|51|52|53)\d{4}$/.test(pin)) {
+      const prefix = pin.substring(0, 2);
+      if (prefix === '52') {
+        matchedWarehouse = allWarehouses.find(w => w.city === 'Guntur' || w.city === 'Vijayawada' || w.code === 'WH-AP-GNT01') || allWarehouses.find(w => w.state === 'Andhra Pradesh');
+      } else if (prefix === '53') {
+        matchedWarehouse = allWarehouses.find(w => w.city === 'Visakhapatnam' || w.code === 'WH-AP-VSKP01') || allWarehouses.find(w => w.state === 'Andhra Pradesh');
+      } else if (prefix === '50') {
+        matchedWarehouse = allWarehouses.find(w => w.city === 'Hyderabad' || w.code === 'WH-TS-HYD01') || allWarehouses.find(w => w.state === 'Telangana');
+      } else if (prefix === '51') {
+        matchedWarehouse = allWarehouses.find(w => w.city === 'Tirupati' || w.code === 'WH-AP-TPT01') || allWarehouses.find(w => w.state === 'Andhra Pradesh');
+      }
+    }
+  }
+
+  // Fallback to city match if pincode was not supplied or unmapped
+  if (!matchedWarehouse && city) {
+    const cleanCity = String(city).toLowerCase().trim();
+    matchedWarehouse = allWarehouses.find(w =>
+      w.city.toLowerCase().includes(cleanCity) || cleanCity.includes(w.city.toLowerCase())
+    );
+  }
+
+  // Fallback to GPS coordinates if supplied
+  if (!matchedWarehouse && lat && lng) {
+    const targetLat = parseFloat(lat);
+    const targetLng = parseFloat(lng);
+    if (!isNaN(targetLat) && !isNaN(targetLng)) {
+      let minDistance = Infinity;
+      for (const w of allWarehouses) {
+        const dist = calculateDistanceKm(targetLat, targetLng, w.location.lat, w.location.lng);
+        if (dist < minDistance && dist <= 100) {
+          minDistance = dist;
+          matchedWarehouse = w;
+        }
+      }
+    }
+  }
+
+  return { warehouse: matchedWarehouse, mandal: matchedMandal };
+};
+
+// @desc    Check Delivery Serviceability & Maintenance Status strictly by Pincode / Address
+// @route   GET /api/warehouses/check-serviceability
+// @access  Public
+export const checkServiceability = async (req, res) => {
+  try {
+    const { pincode, city, lat, lng } = req.query;
+    const cleanPin = String(pincode || '').trim();
+
+    if (!cleanPin && !city && (!lat || !lng)) {
+      return res.json({
+        success: false,
+        isServiceable: false,
+        status: 'invalid',
+        message: 'Please provide a valid 6-digit postal pincode to check delivery availability.'
+      });
+    }
+
+    const { warehouse: matchedWarehouse, mandal } = await findServiceWarehouseForPincode(cleanPin, city, lat, lng);
+
+    if (!matchedWarehouse) {
+      return res.json({
+        success: false,
+        isServiceable: false,
+        status: 'unserviceable',
+        pincode: cleanPin,
+        message: `❌ No delivery service available for pincode ${cleanPin || 'this location'}. We do not currently service this area.`
+      });
+    }
+
+    // Check if matched warehouse status is 'maintenance' or 'inactive'
+    if (matchedWarehouse.status === 'maintenance' || matchedWarehouse.status === 'inactive') {
+      return res.json({
+        success: false,
+        isServiceable: false,
+        status: 'maintenance',
+        pincode: cleanPin,
+        warehouseName: matchedWarehouse.name,
+        warehouseCode: matchedWarehouse.code,
+        message: `⚠️ Delivery Service Suspended. Delivery in pincode ${cleanPin || matchedWarehouse.pincode} is temporarily paused because the local warehouse hub (${matchedWarehouse.name}) is under maintenance.`
+      });
+    }
+
+    return res.json({
+      success: true,
+      isServiceable: true,
+      status: 'active',
+      pincode: cleanPin || matchedWarehouse.pincode,
+      mandal: mandal?.mandal || null,
+      district: mandal?.district || matchedWarehouse.city,
+      warehouseName: matchedWarehouse.name,
+      warehouseCode: matchedWarehouse.code,
+      warehouseCity: matchedWarehouse.city,
+      estimatedTransitDays: '1-2 Days',
+      message: `✅ Delivery Available! Delivered via ${matchedWarehouse.name} (${matchedWarehouse.city}).`
+    });
+  } catch (error) {
+    console.error('Error checking serviceability:', error);
+    res.status(500).json({ success: false, message: 'Server error checking address serviceability.' });
+  }
+};
+
 

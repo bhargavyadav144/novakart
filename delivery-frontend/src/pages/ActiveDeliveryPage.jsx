@@ -6,6 +6,7 @@ import BarcodeVisual from '../components/BarcodeVisual';
 import DeliveryRouteMap, { PERMANENT_WAREHOUSES } from '../components/DeliveryRouteMap';
 import CustomerCallModal from '../components/CustomerCallModal';
 import DoorstepDeliveryScanModal from '../components/DoorstepDeliveryScanModal';
+import ProximityDeliveryAlertModal from '../components/ProximityDeliveryAlertModal';
 
 export const formatDateTimeWithSeconds = (dateStr) => {
   if (!dateStr) return 'N/A';
@@ -32,6 +33,8 @@ export default function ActiveDeliveryPage() {
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [isDoorstepScanModalOpen, setIsDoorstepScanModalOpen] = useState(false);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [isProximityAlertOpen, setIsProximityAlertOpen] = useState(false);
+  const [skippedStopsMap, setSkippedStopsMap] = useState({});
   const [customerContactedMap, setCustomerContactedMap] = useState({});
   const [warehouses, setWarehouses] = useState(PERMANENT_WAREHOUSES);
   const [endLocation, setEndLocation] = useState({
@@ -41,6 +44,42 @@ export default function ActiveDeliveryPage() {
     lng: 80.6400
   });
   const navigate = useNavigate();
+
+  // Return Pickups Pipeline State
+  const [activeTab, setActiveTab] = useState('DELIVERIES'); // 'DELIVERIES' | 'RETURNS'
+  const [returnPickups, setReturnPickups] = useState([]);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+
+  const fetchReturnPickups = () => {
+    setLoadingReturns(true);
+    deliveryApi.get('/returns/delivery/my-pickups')
+      .then(({ data }) => {
+        if (data.success) {
+          setReturnPickups(data.pickups || []);
+        }
+      })
+      .catch((err) => console.error('Error fetching return pickups:', err))
+      .finally(() => setLoadingReturns(false));
+  };
+
+  const handleConfirmReturnPickup = async (ret) => {
+    const defaultBarcode = `RET-${(ret._id || '').slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    const barcode = prompt('Enter or scan returned package barcode:', defaultBarcode);
+    if (!barcode) return;
+
+    try {
+      const res = await deliveryApi.put(`/returns/delivery/${ret._id}/pickup-confirm`, {
+        barcodeScanned: barcode,
+        pickupProofNotes: 'Package collected from customer doorstep with original tags & condition verified.'
+      });
+      if (res.data.success) {
+        alert(`🎉 Doorstep Return Parcel (#${ret.orderNumber || ret.orderId?.orderNumber}) collected successfully!\n\n📍 Destination: ${ret.destinationWarehouseId?.name || 'Warehouse Hub'}\nPlease hand over to Hub QC inspector upon arrival.`);
+        fetchReturnPickups();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to confirm return pickup');
+    }
+  };
 
   const handleCallCompleted = (outcome) => {
     if (!activeOrder) return;
@@ -76,6 +115,7 @@ export default function ActiveDeliveryPage() {
 
   useEffect(() => {
     fetchActiveOrders(endLocation);
+    fetchReturnPickups();
     // Fetch permanent warehouses from backend
     deliveryApi.get('/warehouses')
       .then(({ data }) => {
@@ -242,15 +282,276 @@ export default function ActiveDeliveryPage() {
           </div>
         )}
 
-        {/* IN-APP INTERACTIVE FLEET RADAR & ROUTE SEQUENCING MAP */}
-        <DeliveryRouteMap
-          activeOrders={activeOrders}
-          selectedIndex={selectedIndex}
-          onSelectStop={(idx) => setSelectedIndex(idx)}
-          endLocation={endLocation}
-          onEndLocationChange={handleEndLocationChange}
-          warehouses={warehouses}
-        />
+        {/* TABS SWITCHER: FORWARD DELIVERIES vs DOORSTEP RETURN PICKUPS */}
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          marginBottom: '20px'
+        }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('DELIVERIES')}
+            style={{
+              flex: 1,
+              padding: '14px 20px',
+              borderRadius: '10px',
+              border: 'none',
+              background: activeTab === 'DELIVERIES' ? '#2563EB' : '#FFFFFF',
+              color: activeTab === 'DELIVERIES' ? '#FFFFFF' : '#475569',
+              fontWeight: '800',
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              boxShadow: activeTab === 'DELIVERIES' ? '0 4px 14px rgba(37, 99, 235, 0.35)' : '0 2px 6px rgba(0,0,0,0.05)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <i className="fa-solid fa-truck"></i> Forward Deliveries ({activeOrders.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('RETURNS');
+              fetchReturnPickups();
+            }}
+            style={{
+              flex: 1,
+              padding: '14px 20px',
+              borderRadius: '10px',
+              border: 'none',
+              background: activeTab === 'RETURNS' ? '#F59E0B' : '#FFFFFF',
+              color: activeTab === 'RETURNS' ? '#131921' : '#475569',
+              fontWeight: '800',
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              boxShadow: activeTab === 'RETURNS' ? '0 4px 14px rgba(245, 158, 11, 0.35)' : '0 2px 6px rgba(0,0,0,0.05)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <i className="fa-solid fa-rotate-left"></i> Doorstep Return Pickups ({returnPickups.length})
+          </button>
+        </div>
+
+        {activeTab === 'RETURNS' && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: '12px',
+              padding: '16px 20px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: '#92400E' }}>
+                  <i className="fa-solid fa-rotate-left" style={{ marginRight: '8px' }}></i>
+                  Assigned Doorstep Return Pickups ({returnPickups.length})
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#B45309' }}>
+                  Collect returned parcels from customer doorstep, verify barcode, and deliver to assigned Warehouse Hub for Quality Control (QC).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchReturnPickups}
+                style={{
+                  background: '#D97706',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px 16px',
+                  fontWeight: '700',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <i className="fa-solid fa-rotate"></i> Refresh Pickups
+              </button>
+            </div>
+
+            {loadingReturns ? (
+              <div style={{ padding: '60px', textAlign: 'center', color: '#64748B' }}>
+                <i className="fa-solid fa-spinner fa-spin fa-2x" style={{ color: '#F59E0B', marginBottom: '12px' }}></i>
+                <div>Loading assigned return pickups...</div>
+              </div>
+            ) : returnPickups.length === 0 ? (
+              <div style={{ background: '#FFFFFF', padding: '60px', textAlign: 'center', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <i className="fa-solid fa-box-open fa-3x" style={{ color: '#CBD5E1', marginBottom: '12px' }}></i>
+                <h3 style={{ color: '#1E293B', marginBottom: '6px' }}>No Return Pickups Currently Assigned</h3>
+                <p style={{ color: '#64748B', fontSize: '0.88rem' }}>When Admin dispatches returns in your area, they will appear here for doorstep collection.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {returnPickups.map(ret => (
+                  <div
+                    key={ret._id}
+                    style={{
+                      background: '#FFFFFF',
+                      borderRadius: '14px',
+                      border: '1px solid #E2E8F0',
+                      padding: '20px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#F59E0B', textTransform: 'uppercase' }}>
+                          DOORSTEP RETURN PICKUP
+                        </span>
+                        <h4 style={{ margin: '2px 0 0 0', fontSize: '1.05rem', fontWeight: '800', color: '#0F172A' }}>
+                          Order #{ret.orderNumber || ret.orderId?.orderNumber}
+                        </h4>
+                      </div>
+
+                      <div>
+                        {ret.status === 'PICKED_UP' ? (
+                          <span style={{ background: '#D1FAE5', color: '#065F46', padding: '4px 12px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '800' }}>
+                            ✓ COLLECTED (EN ROUTE TO HUB)
+                          </span>
+                        ) : (
+                          <span style={{ background: '#FEF3C7', color: '#B45309', padding: '4px 12px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '800' }}>
+                            ● PICKUP SCHEDULED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Customer & Address Details */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                      gap: '16px',
+                      background: '#F8FAFC',
+                      padding: '14px',
+                      borderRadius: '10px',
+                      marginBottom: '16px'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
+                          Customer &amp; Doorstep Address
+                        </div>
+                        <div style={{ fontSize: '0.92rem', fontWeight: '700', color: '#0F172A', marginTop: '2px' }}>
+                          {ret.pickupAddress?.fullName || ret.customerId?.name}
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: '#475569', marginTop: '2px' }}>
+                          📍 {ret.pickupAddress?.street}, {ret.pickupAddress?.city}, {ret.pickupAddress?.state} - {ret.pickupAddress?.postalCode}
+                        </div>
+                        <div style={{ marginTop: '8px' }}>
+                          <a
+                            href={`tel:${ret.pickupAddress?.phone || ret.customerId?.phone}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: '#2563EB',
+                              color: '#FFFFFF',
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              fontSize: '0.78rem',
+                              fontWeight: '700',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <i className="fa-solid fa-phone"></i> Call {ret.pickupAddress?.phone || ret.customerId?.phone}
+                          </a>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
+                          Destination Warehouse Hub (Deliver Here)
+                        </div>
+                        <div style={{ fontSize: '0.92rem', fontWeight: '700', color: '#0F172A', marginTop: '2px' }}>
+                          🏢 {ret.destinationWarehouseId?.name || 'Regional Central Hub'}
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: '#475569', marginTop: '2px' }}>
+                          {ret.destinationWarehouseId?.address}, {ret.destinationWarehouseId?.city}
+                        </div>
+                        {ret.agentPickup?.barcodeScanned && (
+                          <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#059669', fontWeight: '700' }}>
+                            <i className="fa-solid fa-barcode"></i> Scanned Barcode: {ret.agentPickup.barcodeScanned}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Product & Action */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                      {ret.items && ret.items[0] && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          {ret.items[0].image && (
+                            <img
+                              src={ret.items[0].image}
+                              alt=""
+                              style={{ width: '42px', height: '42px', borderRadius: '6px', objectFit: 'cover' }}
+                            />
+                          )}
+                          <div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#0F172A' }}>
+                              {ret.items[0].name} (Qty: {ret.items[0].quantity})
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#DC2626', fontWeight: '600' }}>
+                              Reason: {ret.reasonCategory?.replace(/_/g, ' ')}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {ret.status !== 'PICKED_UP' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmReturnPickup(ret)}
+                          style={{
+                            background: '#16A34A',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '10px 20px',
+                            fontSize: '0.88rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
+                          }}
+                        >
+                          <i className="fa-solid fa-barcode"></i> Confirm Doorstep Pickup &amp; Scan
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: '0.82rem', color: '#059669', fontWeight: '700' }}>
+                          <i className="fa-solid fa-truck-ramp-box"></i> Parcel with courier. Deliver to {ret.destinationWarehouseId?.name} for QC check.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'DELIVERIES' && (
+          <>
+            {/* IN-APP INTERACTIVE FLEET RADAR & ROUTE SEQUENCING MAP */}
+            <DeliveryRouteMap
+              activeOrders={activeOrders}
+              selectedIndex={selectedIndex}
+              onSelectStop={(idx) => setSelectedIndex(idx)}
+              endLocation={endLocation}
+              onEndLocationChange={handleEndLocationChange}
+              warehouses={warehouses}
+            />
 
         {/* VISUAL CORRIDOR WAYPOINT PROGRESSION STEPPER */}
         <div style={{
@@ -615,6 +916,34 @@ export default function ActiveDeliveryPage() {
                       <i className="fa-solid fa-square-phone"></i> Cellular
                     </a>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const mapElem = document.getElementById('route-map-container') || document.querySelector('.leaflet-container');
+                      if (mapElem) {
+                        mapElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 14px',
+                      fontSize: '0.82rem',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 8px rgba(14, 165, 233, 0.4)'
+                    }}
+                    title="Focus Leaflet map on customer pinned address coordinates"
+                  >
+                    <i className="fa-solid fa-map-location-dot"></i>
+                    <span>🗺️ Go to Map / Navigate to Address</span>
+                  </button>
                 </div>
               </div>
 
@@ -626,7 +955,7 @@ export default function ActiveDeliveryPage() {
                 <i className="fa-solid fa-box"></i> {activeOrder.items?.length || 1} Item(s) in Parcel &bull; {activeOrder.items?.[0]?.name || 'Freight Goods'}
               </span>
               <span style={{ fontSize: '0.86rem', fontWeight: '700', color: '#1E293B' }}>
-                Collection: {activeOrder.paymentMethod === 'Cash on Delivery (COD)' ? `COD ${formatINR(activeOrder.totalAmount)}` : 'Prepaid (Online)'}
+                Collection: {activeOrder.paymentMethod === 'Cash on Delivery (COD)' ? `COD ${formatINR(activeOrder.totalAmount)}` : '🔒 Prepaid (4-Digit OTP Required)'}
               </span>
             </div>
 
@@ -673,6 +1002,28 @@ export default function ActiveDeliveryPage() {
                   >
                     <i className="fa-solid fa-barcode"></i> Scan Package Barcode to Deliver (Stop #{selectedIndex + 1})
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsProximityAlertOpen(true)}
+                    style={{
+                      background: 'rgba(234, 179, 8, 0.15)',
+                      border: '1px solid #EAB308',
+                      color: '#B45309',
+                      padding: '12px',
+                      borderRadius: '10px',
+                      fontSize: '0.86rem',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <i className="fa-solid fa-location-crosshairs" style={{ color: '#EAB308' }}></i> 📍 Near Customer? Trigger Full-Screen Proximity Alert
+                  </button>
+
                   <span style={{ fontSize: '0.74rem', color: '#64748B', textAlign: 'center' }}>
                     <i className="fa-solid fa-shield-halved" style={{ color: '#10B981' }}></i> Doorstep Proof-of-Delivery Barcode Scan required before customer handover
                   </span>
@@ -682,6 +1033,8 @@ export default function ActiveDeliveryPage() {
 
           </div>
         )}
+      </>
+    )}
 
         {/* Warehouse Pickup Barcode Scanner Modal */}
         <BarcodeScannerModal
@@ -709,6 +1062,29 @@ export default function ActiveDeliveryPage() {
             order={activeOrder}
             onClose={() => setIsCallModalOpen(false)}
             onCallCompleted={handleCallCompleted}
+          />
+        )}
+
+        {/* Full-Screen Near-Location Proximity Notification Modal */}
+        {isProximityAlertOpen && activeOrder && (
+          <ProximityDeliveryAlertModal
+            isOpen={isProximityAlertOpen}
+            order={activeOrder}
+            stopIndex={selectedIndex}
+            onTrackDeliver={() => {
+              setIsProximityAlertOpen(false);
+              setIsDoorstepScanModalOpen(true);
+            }}
+            onCallCustomer={() => {
+              setIsProximityAlertOpen(false);
+              setIsCallModalOpen(true);
+            }}
+            onDeliverLater={() => {
+              setIsProximityAlertOpen(false);
+              if (activeOrder?._id) {
+                setSkippedStopsMap(prev => ({ ...prev, [activeOrder._id]: true }));
+              }
+            }}
           />
         )}
 

@@ -30,6 +30,18 @@ export function SocketProvider({ children }) {
       setLiveAlerts((prev) => [data, ...prev]);
     });
 
+    s.on('delivery_otp_received', (data) => {
+      setLiveAlerts((prev) => [{ ...data, type: 'DELIVERY_OTP' }, ...prev]);
+    });
+
+    s.on('doorstep_return_otp_generated', (data) => {
+      setLiveAlerts((prev) => [{ ...data, type: 'RETURN_OTP' }, ...prev]);
+    });
+
+    s.on('delivery_attempt_failed', (data) => {
+      setLiveAlerts((prev) => [{ ...data, type: 'DELIVERY_FAILED' }, ...prev]);
+    });
+
     setSocket(s);
 
     return () => {

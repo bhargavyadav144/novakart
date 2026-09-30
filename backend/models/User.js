@@ -6,15 +6,22 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   phone: { type: String },
-  role: { type: String, enum: ['customer', 'seller', 'delivery', 'admin', 'warehouse_manager', 'finance'], default: 'customer' },
+  role: { type: String, enum: ['customer', 'seller', 'delivery', 'admin', 'warehouse_manager', 'finance', 'support_agent'], default: 'customer' },
   warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse' },
+  workerId: { type: String, default: '' },
+  specialty: { type: String, default: '' },
+  languages: [{ type: String, default: ['ENGLISH'] }],
+  supportDutyStatus: { type: String, enum: ['ONLINE', 'IN_CONSULTATION', 'OFFLINE'], default: 'ONLINE' },
   avatar: { type: String, default: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80' },
   firebaseUid: { type: String },
   isBlocked: { type: Boolean, default: false },
   gender: { type: String, default: '' },
   dob: { type: String, default: '' },
   address: { type: String, default: '' },
-  mustChangePassword: { type: Boolean, default: false }
+  walletBalance: { type: Number, default: 0 },
+  mustChangePassword: { type: Boolean, default: false },
+  supportRating: { type: Number, default: 5.0 },
+  supportRatingCount: { type: Number, default: 0 }
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

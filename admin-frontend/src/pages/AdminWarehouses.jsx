@@ -1,5 +1,352 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import adminApi from '../services/adminApi';
+
+function AdminWarehouseCoverageModal({ warehouse, onClose, onSaved }) {
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const circleRef = useRef(null);
+  const markerRef = useRef(null);
+
+  const existing = warehouse.serviceArea || {};
+  const [pincodes, setPincodes] = useState(
+    existing.pincodes?.length ? existing.pincodes.join(', ') : (warehouse.pincode || '522001, 522002')
+  );
+  const [lat, setLat] = useState(existing.center?.lat || warehouse.location?.lat || 16.3067);
+  const [lng, setLng] = useState(existing.center?.lng || warehouse.location?.lng || 80.4365);
+  const [radiusKm, setRadiusKm] = useState(existing.radiusKm || 15);
+  const [color, setColor] = useState(existing.color || '#2563EB');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState({ type: '', text: '' });
+
+  const COLOR_CHOICES = [
+    { name: 'Royal Blue', hex: '#2563EB' },
+    { name: 'Emerald', hex: '#10B981' },
+    { name: 'Purple', hex: '#8B5CF6' },
+    { name: 'Amber', hex: '#F59E0B' },
+    { name: 'Crimson', hex: '#EF4444' },
+    { name: 'Cyan', hex: '#06B6D4' }
+  ];
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    const L = window.L;
+    if (!L) return;
+
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: true,
+      attributionControl: false
+    }).setView([lat, lng], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    mapInstanceRef.current = map;
+
+    const hubIcon = L.divIcon({
+      className: 'admin-hub-icon',
+      html: `
+        <div style="
+          width: 36px;
+          height: 36px;
+          background: #0F172A;
+          border: 3px solid ${color};
+          border-radius: 10px;
+          color: #FFF;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.1rem;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          transform: translate(-50%, -50%);
+        ">
+          <i class="fa-solid fa-warehouse"></i>
+        </div>
+      `,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+
+    const marker = L.marker([lat, lng], { icon: hubIcon }).addTo(map);
+    markerRef.current = marker;
+
+    const circle = L.circle([lat, lng], {
+      radius: radiusKm * 1000,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.18,
+      weight: 2
+    }).addTo(map);
+    circleRef.current = circle;
+
+    map.on('click', (e) => {
+      const newLat = parseFloat(e.latlng.lat.toFixed(5));
+      const newLng = parseFloat(e.latlng.lng.toFixed(5));
+      setLat(newLat);
+      setLng(newLng);
+    });
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!circleRef.current || !markerRef.current) return;
+    circleRef.current.setLatLng([lat, lng]);
+    circleRef.current.setRadius(radiusKm * 1000);
+    circleRef.current.setStyle({ color, fillColor: color });
+    markerRef.current.setLatLng([lat, lng]);
+  }, [lat, lng, radiusKm, color]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMsg({ type: '', text: '' });
+
+    try {
+      const payload = {
+        pincodes: pincodes.split(',').map((s) => s.trim()).filter(Boolean),
+        center: { lat: parseFloat(lat), lng: parseFloat(lng) },
+        radiusKm: parseFloat(radiusKm),
+        color
+      };
+
+      const { data } = await adminApi.put(`/warehouses/${warehouse._id}/service-area`, payload);
+      setMsg({ type: 'success', text: data.message || 'Warehouse coverage area saved successfully!' });
+      setTimeout(() => {
+        onSaved();
+        onClose();
+      }, 1000);
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || 'Failed to update coverage area' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      background: 'rgba(15, 23, 42, 0.65)',
+      backdropFilter: 'blur(4px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1100,
+      padding: '20px'
+    }}>
+      <div style={{
+        background: '#FFFFFF',
+        borderRadius: '16px',
+        width: '100%',
+        maxWidth: '850px',
+        maxHeight: '92vh',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          padding: '16px 24px',
+          background: '#0F172A',
+          color: '#FFFFFF',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="fa-solid fa-map-location-dot" style={{ color: color }}></i>
+              Admin Warehouse Coverage Territory: {warehouse.name} ({warehouse.code})
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>
+              Define the master facility boundary &amp; serviced postal pincodes for this regional hub.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: 'none',
+              color: '#FFFFFF',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <i className="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flex: 1, minHeight: '380px', overflow: 'hidden' }}>
+          {/* Interactive Map View */}
+          <div style={{ flex: 1, position: 'relative', minHeight: '360px' }}>
+            <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '360px' }} />
+            <div style={{
+              position: 'absolute',
+              bottom: '12px',
+              left: '12px',
+              background: 'rgba(15, 23, 42, 0.85)',
+              color: '#FFF',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              zIndex: 1000
+            }}>
+              <i className="fa-solid fa-circle-info"></i> Click map to shift hub center pin
+            </div>
+          </div>
+
+          {/* Form Settings Sidebar */}
+          <form onSubmit={handleSubmit} style={{
+            width: '340px',
+            background: '#F8FAFC',
+            borderLeft: '1px solid #E2E8F0',
+            padding: '20px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}>
+            <div>
+              {msg.text && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  marginBottom: '14px',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  background: msg.type === 'success' ? '#DCFCE7' : '#FEE2E2',
+                  color: msg.type === 'success' ? '#15803D' : '#B91C1C'
+                }}>
+                  {msg.text}
+                </div>
+              )}
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#1E293B', marginBottom: '4px' }}>
+                  Coverage Radius: <span style={{ color: color }}>{radiusKm} KM</span>
+                </label>
+                <input
+                  type="range"
+                  min="2"
+                  max="40"
+                  step="1"
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(parseFloat(e.target.value))}
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#1E293B', marginBottom: '4px' }}>
+                  Facility Serviced Pincodes
+                </label>
+                <textarea
+                  rows="3"
+                  value={pincodes}
+                  onChange={(e) => setPincodes(e.target.value)}
+                  placeholder="e.g. 522001, 522002, 522017, 522018"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '0.82rem',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>Comma-separated postal codes</span>
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#1E293B', marginBottom: '4px' }}>
+                  Center Location
+                </label>
+                <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#334155', background: '#FFF', padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                  {lat}, {lng}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#1E293B', marginBottom: '6px' }}>
+                  Boundary Perimeter Color
+                </label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {COLOR_CHOICES.map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => setColor(c.hex)}
+                      style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        background: c.hex,
+                        border: color === c.hex ? '3px solid #0F172A' : '2px solid #FFF',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  background: '#FFF',
+                  color: '#475569',
+                  fontSize: '0.82rem',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                  color: '#FFF',
+                  fontSize: '0.82rem',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)'
+                }}
+              >
+                {saving ? 'Saving...' : 'Save Area'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminWarehouses() {
   const [warehouses, setWarehouses] = useState([]);
@@ -32,6 +379,7 @@ export default function AdminWarehouses() {
 
   // Password & Credentials management state
   const [passwordModalWh, setPasswordModalWh] = useState(null);
+  const [coverageModalWh, setCoverageModalWh] = useState(null);
   const [newManagerPassword, setNewManagerPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordUpdating, setPasswordUpdating] = useState(false);
@@ -705,6 +1053,27 @@ export default function AdminWarehouses() {
                           }}
                         >
                           <i className="fa-solid fa-key" style={{ color: '#4F46E5' }}></i> Password
+                        </button>
+                        <button
+                          onClick={() => setCoverageModalWh(w)}
+                          title="Mark Master Facility Coverage Territory"
+                          style={{
+                            background: '#EFF6FF',
+                            border: '1px solid #BFDBFE',
+                            color: '#1D4ED8',
+                            padding: '6px 9px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <i className="fa-solid fa-map-location-dot" style={{ color: w.serviceArea?.color || '#2563EB' }}></i>
+                          Coverage (Full District / {w.serviceArea?.radiusKm || 100}km)
                         </button>
                         <button
                           onClick={() => openEditModal(w)}
@@ -1483,6 +1852,15 @@ export default function AdminWarehouses() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Admin Warehouse Coverage Territory Modal */}
+      {coverageModalWh && (
+        <AdminWarehouseCoverageModal
+          warehouse={coverageModalWh}
+          onClose={() => setCoverageModalWh(null)}
+          onSaved={fetchWarehouses}
+        />
       )}
     </div>
   );

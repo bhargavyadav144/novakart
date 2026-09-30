@@ -8,6 +8,20 @@ export function WarehouseAuthProvider({ children }) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get('auth_token');
+      const urlUser = params.get('auth_user');
+      if (urlToken && urlUser) {
+        localStorage.setItem('novakart_warehouse_token', urlToken);
+        localStorage.setItem('novakart_warehouse_user', decodeURIComponent(urlUser));
+        setManagerUser(JSON.parse(decodeURIComponent(urlUser)));
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setIsInitialized(true);
+        return;
+      }
+    } catch (e) {}
+
     const storedUser = localStorage.getItem('novakart_warehouse_user');
     const token = localStorage.getItem('novakart_warehouse_token');
 

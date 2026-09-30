@@ -105,8 +105,8 @@
         "state": "Uttar Pradesh",
         "postalCode": "201301"
       },
-      "status": "pending_approval",
-      "isApproved": false,
+      "status": "approved",
+      "isApproved": true,
       "revenue": 0,
       "totalOrders": 0,
       "completedOrders": 0,

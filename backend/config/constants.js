@@ -4,7 +4,8 @@ export const ROLES = {
   DELIVERY: 'delivery',
   ADMIN: 'admin',
   WAREHOUSE_MANAGER: 'warehouse_manager',
-  FINANCE: 'finance'
+  FINANCE: 'finance',
+  SUPPORT: 'support_agent'
 };
 
 export const ORDER_STATUSES = {
@@ -17,7 +18,10 @@ export const ORDER_STATUSES = {
   DELIVERED: 'DELIVERED',
   COMPLETED: 'COMPLETED',
   REJECTED: 'REJECTED',
-  CANCELLED: 'CANCELLED'
+  CANCELLED: 'CANCELLED',
+  UNDELIVERED: 'UNDELIVERED',
+  RTO_INITIATED: 'RTO_INITIATED',
+  DOORSTEP_RETURNED: 'DOORSTEP_RETURNED'
 };
 
 export const DELIVERY_REQUEST_STATUSES = {

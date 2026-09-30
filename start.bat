@@ -24,13 +24,14 @@ node "%~dp0run.js"
 echo.
 echo =========================================================================
 echo   ✅ ALL 5 SERVICES ARE RUNNING!
-echo.
-echo   🛒 1. Customer Store:        http://localhost:3000
-echo   🏪 2. Seller Portal:          http://localhost:3001
-echo   🛵 3. Delivery Agent Radar:   http://localhost:3002
-echo   🛡️ 4. Admin Control Center:   http://localhost:3003
-echo   🏭 5. Warehouse Hub:          http://localhost:3004
-echo   ⚡ 6. Backend API Engine:     http://localhost:5050
+echo   🛒 1. Customer Store:              http://localhost:3000
+echo   🏪 2. Seller Portal:                http://localhost:3001
+echo   🛵 3. Delivery Agent Radar:         http://localhost:3002
+echo   🛡️ 4. Admin Control Center:         http://localhost:3003
+echo   🏭 5. Warehouse Hub:                http://localhost:3004
+echo   💰 6. Digital Payments & Treasury:  http://localhost:3005
+echo   🎧 7. Help Center Resolution Desk:  http://localhost:3006
+echo   ⚡ 8. Backend API Engine:           http://localhost:5050
 echo =========================================================================
 echo.
 echo Opening browser storefront in 5 seconds...

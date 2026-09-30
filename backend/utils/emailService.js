@@ -170,3 +170,94 @@ export const sendGiftCardEmail = async (email, giftCard) => {
 
   await sendHtmlEmail(email, `🎁 Congratulations! You've earned a ₹50 Gift Card!`, html);
 };
+
+// 4. Delivery OTP Email Template
+export const sendDeliveryOtpEmail = async (email, order, otp, agentName = 'Delivery Executive') => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <div style="text-align: center; border-bottom: 2px solid #3B82F6; padding-bottom: 15px; margin-bottom: 20px;">
+        <h2 style="color: #1E40AF; margin: 0;">🔑 Secure Delivery Verification OTP</h2>
+        <p style="color: #64748b; margin: 5px 0 0;">Your NovaKart order <strong>#${order.orderNumber}</strong> is Out for Delivery!</p>
+      </div>
+
+      <div style="text-align: center; background: #EFF6FF; border: 2px dashed #3B82F6; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+        <span style="font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: #1E40AF; font-weight: bold;">YOUR 6-DIGIT DELIVERY OTP CODE</span><br/>
+        <strong style="font-size: 2.5rem; letter-spacing: 6px; color: #1D4ED8; display: block; margin: 10px 0;">${otp}</strong>
+        <span style="font-size: 0.85rem; color: #4b5563;">Please give this OTP to delivery executive <strong>${agentName}</strong> to collect your parcel.</span>
+      </div>
+
+      <div style="background-color: #f8fafc; border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.6;">
+        <strong>Order Summary:</strong><br/>
+        • Order Number: <strong>${order.orderNumber}</strong><br/>
+        • Customer Name: <strong>${order.deliveryAddress?.fullName || 'Customer'}</strong><br/>
+        • Delivery Address: ${order.deliveryAddress?.street || ''}, ${order.deliveryAddress?.city || ''} (${order.deliveryAddress?.postalCode || ''})<br/>
+        • Payment Method: <strong>${order.paymentMethod || 'Prepaid Online'}</strong>
+      </div>
+
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="http://localhost:3000/orders/${order._id}/track" style="background-color: #2563EB; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; display: inline-block;">Track Live Delivery Rider</a>
+      </div>
+
+      <div style="text-align: center; color: #94a3b8; font-size: 0.78rem; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+        For security, do not share this OTP with anyone other than your assigned NovaKart delivery agent.
+      </div>
+    </div>
+  `;
+
+  await sendHtmlEmail(email, `🔑 Delivery OTP: ${otp} for NovaKart Order #${order.orderNumber}`, html);
+};
+
+// 5. Wallet Withdrawal / Cashout Email Template
+export const sendWalletWithdrawalEmail = async (email, agentName, amount, bankDetails, remainingBalance) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <div style="text-align: center; border-bottom: 2px solid #10B981; padding-bottom: 15px; margin-bottom: 20px;">
+        <h2 style="color: #047857; margin: 0;">⚡ Wallet Cashout Request Processed</h2>
+        <p style="color: #64748b; margin: 5px 0 0;">Hi <strong>${agentName}</strong>, your payout request has been registered.</p>
+      </div>
+
+      <div style="background-color: #ECFDF5; border: 1.5px solid #A7F3D0; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+        <div style="font-size: 0.8rem; color: #047857; font-weight: bold; text-transform: uppercase;">Amount Withdrawn</div>
+        <div style="font-size: 2.2rem; font-weight: 900; color: #059669; margin: 6px 0;">₹${amount.toLocaleString('en-IN')}</div>
+        <div style="fontSize: 0.82rem; color: #065F46;">Sent to: <strong>${bankDetails?.bankName || 'Registered Bank'}</strong> (A/C: •••• ${bankDetails?.accountNumber?.slice(-4) || '8204'})</div>
+      </div>
+
+      <div style="background-color: #f8fafc; border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 0.88rem; line-height: 1.6;">
+        • <strong>Transaction Time:</strong> ${new Date().toLocaleString('en-IN')}<br/>
+        • <strong>Destination IFSC:</strong> ${bankDetails?.ifscCode || 'SBIN0004521'}<br/>
+        • <strong>Remaining Wallet Balance:</strong> <strong style="color: #2563EB;">₹${remainingBalance.toLocaleString('en-IN')}</strong><br/>
+        • <strong>Daily Cashout Limit:</strong> 1 withdrawal completed for today
+      </div>
+
+      <div style="text-align: center; color: #94a3b8; font-size: 0.78rem; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+        This is an automated payout confirmation from NovaKart Fleet Nodal Treasury.
+      </div>
+    </div>
+  `;
+
+  await sendHtmlEmail(email, `⚡ NovaKart Wallet Cashout of ₹${amount.toLocaleString('en-IN')} Submitted`, html);
+};
+
+// 6. Security Password OTP Email Template
+export const sendPasswordOtpEmail = async (email, name, otp) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <div style="text-align: center; border-bottom: 2px solid #EF4444; padding-bottom: 15px; margin-bottom: 20px;">
+        <h2 style="color: #B91C1C; margin: 0;">🔐 Account Password Reset OTP</h2>
+        <p style="color: #64748b; margin: 5px 0 0;">Verification code for <strong>${name}</strong></p>
+      </div>
+
+      <div style="text-align: center; background: #FEF2F2; border: 2px dashed #EF4444; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+        <span style="font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: #991B1B; font-weight: bold;">YOUR 6-DIGIT SECURITY OTP</span><br/>
+        <strong style="font-size: 2.6rem; letter-spacing: 8px; color: #DC2626; display: block; margin: 10px 0;">${otp}</strong>
+        <span style="font-size: 0.82rem; color: #7F1D1D;">Valid for 10 minutes. Do not share this OTP with anyone.</span>
+      </div>
+
+      <div style="text-align: center; color: #94a3b8; font-size: 0.78rem; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+        If you did not request a password change, please report immediately to NovaKart Support.
+      </div>
+    </div>
+  `;
+
+  await sendHtmlEmail(email, `🔐 Password Reset Security OTP: ${otp}`, html);
+};

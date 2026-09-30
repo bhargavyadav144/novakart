@@ -22,7 +22,7 @@ body { font-family: var(--font-pay); background-color: var(--pay-bg); color: var
 a { text-decoration: none; color: inherit; }
 
 .pay-layout { display: flex; min-height: 100vh; }
-.pay-sidebar { width: 280px; background: #090D16; color: #fff; display: flex; flex-direction: column; padding: 24px 0; border-right: 1px solid rgba(255,255,255,0.08); }
+.pay-sidebar { width: 280px; background: #090D16; color: #fff; display: flex; flex-direction: column; padding: 24px 0; border-right: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; height: 100vh; flex-shrink: 0; align-self: flex-start; z-index: 100; }
 .pay-brand { padding: 0 24px 22px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 1.25rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
 .pay-brand-sub { font-size: 0.72rem; color: #10B981; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-top: 2px; }
 
@@ -51,9 +51,41 @@ a { text-decoration: none; color: inherit; }
 /* Payment Method Chips */
 .method-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600; background: #F1F5F9; color: #334155; }
 
+/* Persistent Scrollbars & Fixed Sticky Table Container */
+.pay-table-wrapper {
+  overflow: auto;
+  max-height: calc(100vh - 300px);
+  min-height: 380px;
+  border: 1px solid var(--pay-border);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  position: relative;
+}
+
+.pay-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.pay-table-wrapper::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 6px;
+}
+
+.pay-table-wrapper::-webkit-scrollbar-thumb {
+  background: #0EA5E9;
+  border-radius: 6px;
+  border: 2px solid #F1F5F9;
+}
+
+.pay-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #0284C7;
+}
+
 /* Table */
-.pay-table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--pay-border); border-radius: 10px; overflow: hidden; background: #fff; }
-.pay-table th { background: #F8FAFC; padding: 12px 16px; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--pay-border); border-right: 1px solid #F1F5F9; text-align: left; }
+.pay-table { width: 100%; border-collapse: separate; border-spacing: 0; border: none; background: #fff; }
+.pay-table th { position: sticky; top: 0; z-index: 10; background: #F8FAFC; padding: 12px 16px; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--pay-border); border-right: 1px solid #F1F5F9; text-align: left; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .pay-table td { padding: 14px 16px; font-size: 0.88rem; border-bottom: 1px solid #F1F5F9; border-right: 1px solid #F8FAFC; color: #1E293B; }
 .pay-table tr:hover td { background: #F8FAFC; }
 

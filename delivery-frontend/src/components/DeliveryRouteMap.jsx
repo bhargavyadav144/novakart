@@ -245,7 +245,7 @@ export default function DeliveryRouteMap({
             📍 ${ord.deliveryAddress?.street}, <strong>${ord.deliveryAddress?.city}</strong>
           </div>
           <div style="font-size: 0.75rem; color: #059669; font-weight: 700; margin-top: 6px; padding-top: 4px; border-top: 1px solid #E2E8F0;">
-            ${ord.paymentMethod === 'Cash on Delivery (COD)' ? `COD: ₹${ord.totalAmount}` : 'Prepaid Order (Deliver Direct)'}
+            ${ord.paymentMethod === 'Cash on Delivery (COD)' ? `COD: ₹${ord.totalAmount}` : '🔒 Prepaid (4-Digit OTP Required)'}
           </div>
         </div>
       `);
@@ -298,13 +298,23 @@ export default function DeliveryRouteMap({
       `);
     }
 
-    // 4. Draw Route Polyline
+    // 4. Draw Highlighted Yellow Route Polyline
     if (routePoints.length > 1) {
+      // Outer Glowing Yellow Line
       L.polyline(routePoints, {
-        color: '#2563EB',
-        weight: 4,
-        opacity: 0.85,
-        dashArray: '8, 8',
+        color: '#EAB308',
+        weight: 7,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(layerGroup);
+
+      // Inner Bright Yellow Core Line
+      L.polyline(routePoints, {
+        color: '#FEF08A',
+        weight: 3,
+        opacity: 1,
+        lineCap: 'round',
         lineJoin: 'round'
       }).addTo(layerGroup);
     }

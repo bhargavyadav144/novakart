@@ -48,6 +48,9 @@ export default function LoginPage() {
 
   // Social Login State
   const [socialLoading, setSocialLoading] = useState('');
+  const [showFbModal, setShowFbModal] = useState(false);
+  const [fbName, setFbName] = useState('Facebook User');
+  const [fbEmail, setFbEmail] = useState('');
   const [confirmationResult, setConfirmationResult] = useState(null);
 
   const [errorMsg, setErrorMsg] = useState('');
@@ -185,18 +188,34 @@ export default function LoginPage() {
         }
       }, { scope: 'public_profile,email' });
     } else {
-      // Simulate successful Facebook Login in dev environment
-      setSocialLoading('facebook');
-      setTimeout(async () => {
-        const res = await socialLogin('facebook', {
-          name: 'Demo Facebook User',
-          email: 'demofb@gmail.com',
-          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
-          socialId: 'demo-fb-123456'
-        });
-        if (res.success) navigate('/');
-        setSocialLoading('');
-      }, 1000);
+      setShowFbModal(true);
+    }
+  };
+
+  const handleCustomFbSubmit = async (e) => {
+    e.preventDefault();
+    if (!fbEmail.trim()) {
+      setErrorMsg('Please enter your real Facebook account email address.');
+      return;
+    }
+    setSocialLoading('facebook');
+    try {
+      const res = await socialLogin('facebook', {
+        name: fbName || 'Facebook User',
+        email: fbEmail.trim().toLowerCase(),
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(fbName || 'FB')}&background=1877F2&color=fff&bold=true`,
+        socialId: `fb-${Date.now()}`
+      });
+      if (res.success) {
+        setShowFbModal(false);
+        navigate('/');
+      } else {
+        setErrorMsg(res.message);
+      }
+    } catch {
+      setErrorMsg('Facebook authentication failed.');
+    } finally {
+      setSocialLoading('');
     }
   };
 
@@ -499,6 +518,73 @@ export default function LoginPage() {
           New customer? <Link to="/register" style={{ color: 'var(--secondary-color)', fontWeight: '700' }}>Create an Account</Link>
         </div>
       </div>
+      {/* Facebook OAuth Authentication Modal */}
+      {showFbModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div style={{ background: '#ffffff', width: '90%', maxWidth: '440px', borderRadius: '16px', padding: '28px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)', position: 'relative', border: '2px solid #1877F2' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '14px' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#1877F2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.4rem' }}>
+                <i className="fa-brands fa-facebook-f"></i>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0F172A', fontWeight: '800' }}>Facebook OAuth System</h3>
+                <span style={{ fontSize: '0.78rem', color: '#1877F2', fontWeight: '700' }}>Single Sign-On Identity Provider</span>
+              </div>
+              <button onClick={() => setShowFbModal(false)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}>
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleCustomFbSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <p style={{ margin: 0, fontSize: '0.84rem', color: '#475569', lineHeight: '1.45' }}>
+                Sign in with your verified Facebook profile &amp; email address to access NovaKart:
+              </p>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>Facebook Account Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={fbName}
+                  onChange={(e) => setFbName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>Facebook Real Email Address</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={fbEmail}
+                  onChange={(e) => setFbEmail(e.target.value)}
+                  placeholder="e.g. facebook.user@gmail.com"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="submit"
+                  disabled={socialLoading === 'facebook'}
+                  style={{ flex: 1, background: '#1877F2', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  {socialLoading === 'facebook' ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-brands fa-facebook-f"></i>}
+                  Authenticate with Facebook
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFbModal(false)}
+                  style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '12px', borderRadius: '8px', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

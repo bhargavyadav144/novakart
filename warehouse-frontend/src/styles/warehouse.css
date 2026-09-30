@@ -28,18 +28,54 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Custom Permanent Scrollbars & Sticky Table Containers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 6px;
+  border: 2px solid #F1F5F9;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
+.table-responsive,
+.table-container {
+  overflow: auto !important;
+  max-height: calc(100vh - 280px);
+  min-height: 380px;
+  border: 1px solid var(--wh-border);
+  border-radius: 12px;
+  background: #ffffff;
+  position: relative;
+}
+
+table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #F8FAFC !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
 .wh-layout {
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
 }
 
 .wh-main-container {
-  max-width: 1400px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 24px 20px;
   flex: 1;
+  padding: 28px;
+  overflow-y: auto;
+  width: calc(100% - 270px);
 }
 
 /* Navbar */

@@ -36,6 +36,13 @@ export const emitToOrderRoom = (orderId, eventName, payload) => {
   }
 };
 
+// Emit to warehouse fleet command channel
+export const emitToWarehouseFleet = (warehouseId, eventName, payload) => {
+  if (ioInstance) {
+    ioInstance.to(`warehouse_fleet_${warehouseId}`).emit(eventName, payload);
+  }
+};
+
 // Emit to administrative portal
 export const emitToAdmin = (eventName, payload) => {
   if (ioInstance) {

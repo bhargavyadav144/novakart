@@ -4,50 +4,75 @@ import { Seller } from '../models/Seller.js';
 import { DeliveryAgent } from '../models/DeliveryAgent.js';
 import { DeliveryRequest } from '../models/DeliveryRequest.js';
 import { dispatchNearbyDeliveryAgents } from '../services/deliveryDispatchService.js';
-import { emitToSeller, emitToUser, emitToAdmin, emitToOrderRoom } from '../services/socketService.js';
-import { ORDER_STATUSES, DELIVERY_REQUEST_STATUSES, PAYMENT_STATUSES } from '../config/constants.js';
+import { emitToSeller, emitToUser, emitToAdmin, emitToOrderRoom, emitToWarehouseFleet } from '../services/socketService.js';
+import { ORDER_STATUSES, DELIVERY_REQUEST_STATUSES, PAYMENT_STATUSES, PAYMENT_METHODS } from '../config/constants.js';
 import { createNotification } from './notificationController.js';
 import { User } from '../models/User.js';
 import { Product } from '../models/Product.js';
 import { Warehouse } from '../models/Warehouse.js';
-import { calculateDistanceKm } from './warehouseController.js';
+import { calculateDistanceKm, findServiceWarehouseForPincode } from './warehouseController.js';
 import { sendOrderStatusUpdateEmail } from '../utils/emailService.js';
 
 // Auto-assign multi-stage logistics routing: Store -> Mother/Regional Hub -> Delivery Branch -> Customer
-export const assignLogisticsRoute = async (sellerLocation, deliveryLocation, stateHint = 'Andhra Pradesh') => {
+export const assignLogisticsRoute = async (sellerLocation, deliveryTarget, stateHint = 'Andhra Pradesh') => {
   try {
-    const warehouses = await Warehouse.find({ status: 'active' });
+    const warehouses = await Warehouse.find({ status: { $ne: 'inactive' } });
     if (!warehouses || warehouses.length === 0) return null;
 
-    // 1. Origin hub: Mother Warehouse or Regional Sorting Hub nearest to seller location
-    const hubs = warehouses.filter(w => w.type === 'Mother Warehouse' || w.type === 'Regional Sorting Hub');
-    let originHub = hubs[0] || warehouses[0];
+    // 1. Origin hub: Prefer Guntur Regional Hub / AP Hubs for AP orders
+    const gunturHub = warehouses.find(w => w.code === 'WH-AP-GNT01');
+    const vjaHub = warehouses.find(w => w.code === 'WH-AP-VJA01');
+    const apHubs = warehouses.filter(w => w.state === 'Andhra Pradesh' && (w.type === 'Mother Warehouse' || w.type === 'Regional Sorting Hub'));
+    
+    let originHub = gunturHub || vjaHub || apHubs[0] || warehouses[0];
     let minOriginDist = Infinity;
-    const sLat = sellerLocation?.lat || 16.5062;
-    const sLng = sellerLocation?.lng || 80.6480;
+    const sLat = sellerLocation?.lat || 16.3067;
+    const sLng = sellerLocation?.lng || 80.4365;
 
-    for (const h of (hubs.length > 0 ? hubs : warehouses)) {
-      const d = calculateDistanceKm(sLat, sLng, h.location.lat, h.location.lng);
+    const candidateHubs = (apHubs.length > 0) ? apHubs : warehouses;
+    for (const h of candidateHubs) {
+      const d = calculateDistanceKm(sLat, sLng, h.location?.lat, h.location?.lng);
       if (d < minOriginDist) {
         minOriginDist = d;
         originHub = h;
       }
     }
 
-    // 2. Destination branch: Delivery Branch nearest to customer delivery address
-    const branches = warehouses.filter(w => w.type === 'Delivery Branch');
-    let destBranch = branches[0] || warehouses[0];
-    let minDestDist = Infinity;
-    const isTS = typeof stateHint === 'string' && stateHint.toLowerCase().includes('telangana');
-    const dLat = deliveryLocation?.lat || (isTS ? 17.3850 : 16.2437);
-    const dLng = deliveryLocation?.lng || (isTS ? 78.4867 : 80.6400);
+    // 2. Destination facility: First lookup by Pincode & City serviceability
+    let destBranch = null;
+    const delAddress = typeof deliveryTarget === 'object' ? deliveryTarget : {};
+    const pin = String(delAddress?.pincode || delAddress?.postalCode || '').trim();
+    const city = String(delAddress?.city || '').trim();
+    const dLat = delAddress?.coordinates?.lat || delAddress?.lat;
+    const dLng = delAddress?.coordinates?.lng || delAddress?.lng;
 
-    for (const b of (branches.length > 0 ? branches : warehouses)) {
-      const d = calculateDistanceKm(dLat, dLng, b.location.lat, b.location.lng);
-      if (d < minDestDist) {
-        minDestDist = d;
-        destBranch = b;
+    if (pin || city) {
+      const { warehouse: matchedWh } = await findServiceWarehouseForPincode(pin, city, dLat, dLng);
+      if (matchedWh) {
+        destBranch = matchedWh;
       }
+    }
+
+    // 3. Fallback: Find nearest facility across ALL active warehouses (Branches & Sorting Hubs)
+    if (!destBranch) {
+      const isTS = (typeof stateHint === 'string' && stateHint.toLowerCase().includes('telangana')) ||
+                   (typeof delAddress?.state === 'string' && delAddress.state.toLowerCase().includes('telangana'));
+      
+      const targetLat = (dLat && Math.abs(dLat - 28.6139) > 0.5) ? dLat : (isTS ? 17.3850 : 16.3067); // Guntur Hub default (16.3067)
+      const targetLng = (dLng && Math.abs(dLng - 77.2090) > 0.5) ? dLng : (isTS ? 78.4867 : 80.4365); // Guntur Hub default (80.4365)
+
+      let minDestDist = Infinity;
+      for (const w of warehouses) {
+        const d = calculateDistanceKm(targetLat, targetLng, w.location?.lat, w.location?.lng);
+        if (d < minDestDist) {
+          minDestDist = d;
+          destBranch = w;
+        }
+      }
+    }
+
+    if (!destBranch) {
+      destBranch = warehouses[0];
     }
 
     return {
@@ -94,6 +119,30 @@ export const placeOrder = async (req, res, next) => {
 
     if (!items || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Cart items are required to place an order.' });
+    }
+
+    // Strict Pincode & Maintenance Serviceability Check
+    if (deliveryAddress) {
+      const delPin = String(deliveryAddress.pincode || deliveryAddress.postalCode || '').trim();
+      const delCity = String(deliveryAddress.city || '').trim();
+      const delLat = deliveryAddress.coordinates?.lat;
+      const delLng = deliveryAddress.coordinates?.lng;
+
+      const { warehouse: matchedWh } = await findServiceWarehouseForPincode(delPin, delCity, delLat, delLng);
+
+      if (!matchedWh) {
+        return res.status(400).json({
+          success: false,
+          message: `❌ Delivery service is not available for pincode ${delPin || 'this address'}. We do not currently service this location.`
+        });
+      }
+
+      if (matchedWh.status === 'maintenance' || matchedWh.status === 'inactive') {
+        return res.status(400).json({
+          success: false,
+          message: `❌ Delivery service temporarily suspended in pincode ${delPin || matchedWh.pincode}. The local district warehouse (${matchedWh.name}) is currently under maintenance. Please try again later or select another address.`
+        });
+      }
     }
 
     // Lookup products in DB to ensure 100% accurate seller resolution
@@ -150,7 +199,13 @@ export const placeOrder = async (req, res, next) => {
 
     if (giftCardCode) {
       const cleanGiftCode = giftCardCode.trim().toUpperCase();
-      if (cleanGiftCode === 'NOVAKART20') {
+      const altGiftCode = cleanGiftCode.startsWith('GF-')
+        ? cleanGiftCode.replace(/^GF-/, 'GC-')
+        : cleanGiftCode.startsWith('GC-')
+          ? cleanGiftCode.replace(/^GC-/, 'GF-')
+          : cleanGiftCode;
+
+      if (cleanGiftCode === 'NOVAKART20' || altGiftCode === 'NOVAKART20') {
         const orderCount = await Order.countDocuments({ customerId: req.user._id, orderStatus: { $ne: 'CANCELLED' } });
         if (orderCount === 0) {
           giftCardDiscount = 50;
@@ -158,7 +213,23 @@ export const placeOrder = async (req, res, next) => {
       } else {
         const GiftCardModule = await import('../models/GiftCard.js');
         const GiftCard = GiftCardModule.GiftCard;
-        const card = await GiftCard.findOne({ code: cleanGiftCode, customerId: req.user._id, isUsed: false });
+        const userEmail = (req.user.email || '').toLowerCase().trim();
+        const cardConditions = [{ customerId: req.user._id }];
+        if (userEmail) cardConditions.push({ email: userEmail });
+
+        let card = await GiftCard.findOne({
+          code: { $in: [cleanGiftCode, altGiftCode] },
+          isUsed: false,
+          $or: cardConditions
+        });
+
+        if (!card) {
+          card = await GiftCard.findOne({
+            isUsed: false,
+            $or: cardConditions
+          }).sort({ createdAt: -1 });
+        }
+
         if (card && new Date() < new Date(card.expiryDate)) {
           giftCardDiscount = card.amount; // ₹50
           giftCardInstance = card;
@@ -172,8 +243,7 @@ export const placeOrder = async (req, res, next) => {
     let routeData = null;
     try {
       const sellerCoords = seller?.location || { lat: 16.5062, lng: 80.6480 };
-      const destCoords = deliveryAddress.coordinates || { lat: 16.2437, lng: 80.6400 };
-      routeData = await assignLogisticsRoute(sellerCoords, destCoords, deliveryAddress.state);
+      routeData = await assignLogisticsRoute(sellerCoords, deliveryAddress, deliveryAddress.state);
     } catch (e) {
       console.warn('Could not auto-assign logistics route:', e);
     }
@@ -203,6 +273,7 @@ export const placeOrder = async (req, res, next) => {
         address: seller?.businessAddress || 'Connaught Place, New Delhi',
         coordinates: seller?.location || { lat: 28.6139, lng: 77.2090 }
       },
+      deliveryOtp: Math.floor(100000 + Math.random() * 900000).toString(),
       paymentMethod: paymentMethod || 'Cash on Delivery (COD)',
       paymentStatus: paymentMethod === 'Cash on Delivery (COD)' ? PAYMENT_STATUSES.PENDING : PAYMENT_STATUSES.PAID,
       orderStatus: ORDER_STATUSES.PENDING
@@ -249,10 +320,13 @@ export const placeOrder = async (req, res, next) => {
     // Send order confirmation email
     try {
       const emailService = await import('../utils/emailService.js');
-      const expectedDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const expectedDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
       await emailService.sendOrderPlacedEmail(req.user.email, order, expectedDate);
-    } catch (err) {
-      console.error('Failed to send order placement email:', err);
+      if (order.deliveryOtp) {
+        await emailService.sendDeliveryOtpEmail(req.user.email, order, order.deliveryOtp);
+      }
+    } catch (mailErr) {
+      console.error('Failed to send order confirmation mail:', mailErr);
     }
 
     // Clear Customer Cart in MongoDB
@@ -354,7 +428,7 @@ export const getCustomerOrders = async (req, res, next) => {
   try {
     const orders = await Order.find({ customerId: req.user._id })
       .populate('sellerId', 'storeName phone location')
-      .populate('deliveryAgentId', 'fullName phone vehicleType vehicleNumber profileImage currentLocation')
+      .populate('deliveryAgentId', 'fullName phone vehicleType vehicleNumber profileImage faceVerificationPhoto isFaceVerified drivingLicense currentLocation status')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: orders.length, orders });
@@ -371,7 +445,7 @@ export const getOrderById = async (req, res, next) => {
     const order = await Order.findById(req.params.id)
       .populate('customerId', 'name email phone')
       .populate('sellerId', 'storeName ownerName phone businessAddress location')
-      .populate('deliveryAgentId', 'fullName phone vehicleType vehicleNumber profileImage currentLocation')
+      .populate('deliveryAgentId', 'fullName phone vehicleType vehicleNumber profileImage faceVerificationPhoto isFaceVerified drivingLicense currentLocation status')
       .populate('items.productId', 'name title images thumbnail price')
       .populate('logisticsRoute.originWarehouse')
       .populate('logisticsRoute.destinationBranch');
@@ -470,8 +544,7 @@ export const acceptSellerOrder = async (req, res, next) => {
     if (!order.logisticsRoute || !order.logisticsRoute.destinationBranch) {
       try {
         const sellerCoords = seller?.location || { lat: 16.5062, lng: 80.6480 };
-        const destCoords = order.deliveryAddress?.coordinates || { lat: 16.2437, lng: 80.6400 };
-        const routeData = await assignLogisticsRoute(sellerCoords, destCoords, order.deliveryAddress?.state);
+        const routeData = await assignLogisticsRoute(sellerCoords, order.deliveryAddress, order.deliveryAddress?.state);
         if (routeData) {
           order.logisticsRoute = routeData;
         }
@@ -682,8 +755,23 @@ export const updateDeliveryStatus = async (req, res, next) => {
       });
     }
 
-    // Doorstep Barcode Verification for DELIVERED status
+    // Doorstep Barcode & OTP Verification for DELIVERED status
     if (status === ORDER_STATUSES.DELIVERED) {
+      const isCOD = order.paymentMethod === PAYMENT_METHODS.COD || order.paymentMethod === 'Cash on Delivery (COD)' || order.paymentMethod === 'COD';
+      
+      // Mandatory OTP verification for Prepaid (Online / Wallet) Orders
+      if (!isCOD) {
+        const expectedOtp = String(order.deliveryOtp || '1234').trim();
+        const providedOtp = String(otp || '').trim();
+
+        if (!providedOtp || providedOtp !== expectedOtp) {
+          return res.status(400).json({
+            success: false,
+            message: `❌ Invalid Delivery OTP! Please ask the customer for their 4-digit Delivery PIN.`
+          });
+        }
+      }
+
       if (verificationBarcode) {
         const cleanScanned = String(verificationBarcode).trim().toUpperCase().replace(/^['"#\s]+|['"#\s]+$/g, '');
         const targetOrderNum = (order.orderNumber || '').toUpperCase();
@@ -725,7 +813,32 @@ export const updateDeliveryStatus = async (req, res, next) => {
       order.paymentStatus = PAYMENT_STATUSES.PAID;
       agent.todayDeliveries += 1;
       agent.completedDeliveries += 1;
-      agent.totalEarnings += 140; // Delivery commission per completed order
+
+      const tripCommission = 140;
+      agent.totalEarnings += tripCommission;
+
+      if (!agent.wallet) {
+        agent.wallet = { availableBalance: 0, pendingVerificationBalance: 0, totalWithdrawn: 0 };
+      }
+      agent.wallet.availableBalance = (agent.wallet.availableBalance || 0) + tripCommission;
+
+      // Auto-Credit Daily Incentive Milestones directly to Wallet
+      const incentiveMilestones = {
+        6: 60,
+        12: 150,
+        24: 350,
+        36: 600,
+        42: 850,
+        50: 1200
+      };
+
+      const dailyCount = agent.todayDeliveries;
+      if (incentiveMilestones[dailyCount]) {
+        const bonus = incentiveMilestones[dailyCount];
+        agent.wallet.availableBalance += bonus;
+        agent.totalEarnings += bonus;
+        console.log(`🎉 Daily Incentive Target Hit! Rider ${agent.fullName} completed ${dailyCount} deliveries today. Auto-credited +₹${bonus} bonus to wallet.`);
+      }
 
       // Remove from active route queue
       if (agent.activeOrderIds) {
@@ -809,6 +922,251 @@ export const getAdminAllOrders = async (req, res, next) => {
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: orders.length, orders });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// 5. DOORSTEP OTP & RETURN / UNREACHABLE HANDLING
+// ============================================================================
+
+// @desc    Resend Delivery OTP to Customer (for Prepaid Orders)
+// @route   POST /api/orders/delivery/:id/resend-otp
+// @access  Private (Delivery Agent)
+export const resendDeliveryOtp = async (req, res, next) => {
+  try {
+    const agent = await DeliveryAgent.findOne({ userId: req.user._id });
+    if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent profile not found' });
+
+    const order = await Order.findOne({ _id: req.params.id, deliveryAgentId: agent._id });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found for this delivery agent.' });
+
+    // Ensure a valid 4-digit OTP exists
+    if (!order.deliveryOtp || order.deliveryOtp === '1234') {
+      order.deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      await order.save();
+    }
+
+    const payload = {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      otp: order.deliveryOtp,
+      agentName: agent.fullName,
+      agentPhone: agent.phone,
+      message: `🔐 Your 4-digit Delivery OTP for Order #${order.orderNumber} is: ${order.deliveryOtp}. Please share this with rider ${agent.fullName}.`
+    };
+
+    // Emit live to customer and order room
+    emitToUser(order.customerId, 'delivery_otp_received', payload);
+    emitToOrderRoom(order._id, 'delivery_otp_received', payload);
+
+    res.json({
+      success: true,
+      message: `✅ Delivery OTP has been resent to customer screen and mobile!`,
+      otp: order.deliveryOtp,
+      customerPhone: order.deliveryAddress?.phone || 'Customer Phone'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Rider Requests Doorstep Return OTP (Customer wants to return product at delivery)
+// @route   POST /api/orders/delivery/:id/request-doorstep-return-otp
+// @access  Private (Delivery Agent)
+export const requestDoorstepReturnOtp = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    const agent = await DeliveryAgent.findOne({ userId: req.user._id });
+    if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent profile not found' });
+
+    const order = await Order.findOne({ _id: req.params.id, deliveryAgentId: agent._id });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found for this delivery agent.' });
+
+    // Generate fresh 4-digit Return OTP
+    const generatedReturnOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    order.returnOtp = generatedReturnOtp;
+    order.doorstepReturnReason = reason || 'Customer requested return at doorstep';
+    order.timeline.push({
+      status: 'DOORSTEP_RETURN_INITIATED',
+      timestamp: new Date(),
+      note: `Doorstep return initiated by rider ${agent.fullName}. Reason: ${order.doorstepReturnReason}. Return OTP generated.`,
+      updatedBy: agent.fullName
+    });
+    await order.save();
+
+    const payload = {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      returnOtp: generatedReturnOtp,
+      reason: order.doorstepReturnReason,
+      agentName: agent.fullName,
+      message: `🔄 Doorstep Return Requested: Your Return OTP for Order #${order.orderNumber} is: ${generatedReturnOtp}. Share this OTP with the delivery agent to authorize product return.`
+    };
+
+    emitToUser(order.customerId, 'doorstep_return_otp_generated', payload);
+    emitToOrderRoom(order._id, 'doorstep_return_otp_generated', payload);
+
+    res.json({
+      success: true,
+      message: `✅ Return OTP (${generatedReturnOtp}) has been sent to customer! Please ask customer for the 4-digit Return PIN to confirm product return.`,
+      returnOtp: generatedReturnOtp,
+      customerPhone: order.deliveryAddress?.phone || 'Customer Phone'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Confirm Doorstep Return with Customer Return OTP
+// @route   POST /api/orders/delivery/:id/confirm-doorstep-return
+// @access  Private (Delivery Agent)
+export const confirmDoorstepReturn = async (req, res, next) => {
+  try {
+    const { returnOtp, notes } = req.body;
+    const agent = await DeliveryAgent.findOne({ userId: req.user._id });
+    if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent profile not found' });
+
+    const order = await Order.findOne({ _id: req.params.id, deliveryAgentId: agent._id });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found for this delivery agent.' });
+
+    const expectedOtp = String(order.returnOtp || '').trim();
+    const providedOtp = String(returnOtp || '').trim();
+
+    // Verify OTP (allow master override 9999 for test/offline environments)
+    if (!providedOtp || (providedOtp !== expectedOtp && providedOtp !== '9999')) {
+      return res.status(400).json({
+        success: false,
+        message: `❌ Invalid Return OTP! Please ask the customer for the 4-digit Return PIN sent to their phone.`
+      });
+    }
+
+    order.orderStatus = ORDER_STATUSES.DOORSTEP_RETURNED;
+    order.returnStatus = 'DOORSTEP_REJECTED';
+    if (!order.logisticsRoute) order.logisticsRoute = {};
+    order.logisticsRoute.transitStage = 'RETURN_IN_PROGRESS';
+    order.logisticsRoute.notes = `Customer rejected package at doorstep. Staged for return to warehouse hub.`;
+
+    order.timeline.push({
+      status: 'DOORSTEP_RETURNED',
+      timestamp: new Date(),
+      note: `Package return verified at doorstep with Return OTP by rider ${agent.fullName}. Reason: ${order.doorstepReturnReason || 'Customer rejected product'}. Notes: ${notes || 'Item received back in original packaging'}.`,
+      updatedBy: agent.fullName
+    });
+
+    await order.save();
+
+    // Remove from agent's active queue
+    if (agent.activeOrderIds) {
+      agent.activeOrderIds = agent.activeOrderIds.filter(id => id.toString() !== order._id.toString());
+    }
+    if (agent.activeOrderId && agent.activeOrderId.toString() === order._id.toString()) {
+      agent.activeOrderId = agent.activeOrderIds?.[0] || null;
+    }
+    await agent.save();
+
+    // Broadcast alerts
+    emitToUser(order.customerId, 'order_status_update', {
+      orderId: order._id,
+      status: ORDER_STATUSES.DOORSTEP_RETURNED,
+      message: 'Product returned at doorstep. Return request logged for QC and refund.'
+    });
+    emitToOrderRoom(order._id, 'order_status_update', {
+      orderId: order._id,
+      status: ORDER_STATUSES.DOORSTEP_RETURNED
+    });
+    if (agent.assignedWarehouse) {
+      emitToWarehouseFleet(agent.assignedWarehouse, 'return_staged_for_hub', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        agentName: agent.fullName,
+        reason: order.doorstepReturnReason
+      });
+    }
+    emitToAdmin('admin_order_update', { orderId: order._id, status: ORDER_STATUSES.DOORSTEP_RETURNED });
+
+    res.json({
+      success: true,
+      message: `✅ Doorstep Return Confirmed! Package has been verified and staged for return to the warehouse hub.`,
+      order
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Mark Order as Customer Unreachable / Not Lifting Call (No OTP required)
+// @route   POST /api/orders/delivery/:id/customer-unreachable
+// @access  Private (Delivery Agent)
+export const markCustomerUnreachable = async (req, res, next) => {
+  try {
+    const { reason, callAttempts, notes } = req.body;
+    const agent = await DeliveryAgent.findOne({ userId: req.user._id });
+    if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent profile not found' });
+
+    const order = await Order.findOne({ _id: req.params.id, deliveryAgentId: agent._id });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found for this delivery agent.' });
+
+    const attemptsCount = Number(callAttempts) || 3;
+    const failReason = reason || 'Customer Not Lifting Call / Phone Unreachable';
+
+    if (!order.deliveryAttempts) order.deliveryAttempts = [];
+    order.deliveryAttempts.push({
+      attemptNumber: order.deliveryAttempts.length + 1,
+      timestamp: new Date(),
+      reason: failReason,
+      riderNotes: notes || `Called ${attemptsCount} times with no response. Customer unreachable at doorstep.`
+    });
+
+    order.orderStatus = ORDER_STATUSES.UNDELIVERED;
+    order.returnStatus = 'CUSTOMER_NOT_RESPONDING';
+    if (!order.logisticsRoute) order.logisticsRoute = {};
+    order.logisticsRoute.transitStage = 'RETURN_IN_PROGRESS';
+    order.logisticsRoute.notes = `Customer unreachable after ${attemptsCount} call attempts. Returned to hub.`;
+
+    order.timeline.push({
+      status: 'UNDELIVERED_UNREACHABLE',
+      timestamp: new Date(),
+      note: `Delivery attempt failed: ${failReason} (${attemptsCount} calls made). Logged by rider ${agent.fullName}. Staged for RTO to warehouse.`,
+      updatedBy: agent.fullName
+    });
+
+    await order.save();
+
+    // Remove from rider's active queue
+    if (agent.activeOrderIds) {
+      agent.activeOrderIds = agent.activeOrderIds.filter(id => id.toString() !== order._id.toString());
+    }
+    if (agent.activeOrderId && agent.activeOrderId.toString() === order._id.toString()) {
+      agent.activeOrderId = agent.activeOrderIds?.[0] || null;
+    }
+    await agent.save();
+
+    // Broadcast alerts
+    emitToUser(order.customerId, 'delivery_attempt_failed', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      message: `⚠️ Delivery Attempt Unsuccessful: Our courier could not reach you via phone or at your doorstep. Package will be safely returned to hub.`
+    });
+    emitToOrderRoom(order._id, 'order_status_update', {
+      orderId: order._id,
+      status: ORDER_STATUSES.UNDELIVERED
+    });
+    if (agent.assignedWarehouse) {
+      emitToWarehouseFleet(agent.assignedWarehouse, 'rto_package_incoming', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        agentName: agent.fullName,
+        reason: failReason
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `⚠️ Delivery marked as Customer Not Responding. Order #${order.orderNumber} staged for Return to Origin (RTO) hub.`,
+      order
+    });
   } catch (error) {
     next(error);
   }

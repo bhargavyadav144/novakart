@@ -153,7 +153,9 @@ export const loginWithOTP = async (req, res, next) => {
           agentId: agentProfile._id,
           vehicleNumber: agentProfile.vehicleNumber,
           status: agentProfile.status,
-          isApproved: agentProfile.isApproved
+          isApproved: agentProfile.isApproved,
+          profileImage: agentProfile.profileImage || agentProfile.faceVerificationPhoto || user.avatar,
+          faceVerificationPhoto: agentProfile.faceVerificationPhoto || ''
         };
       } else if (expectedRole === ROLES.ADMIN && user.role !== ROLES.ADMIN) {
         return res.status(403).json({
@@ -163,19 +165,25 @@ export const loginWithOTP = async (req, res, next) => {
       }
     }
 
+    if (req.body.newPassword && typeof req.body.newPassword === 'string' && req.body.newPassword.length >= 6) {
+      user.password = req.body.newPassword;
+      await user.save();
+    }
+
     const token = generateToken({ id: user._id, role: expectedRole || user.role });
 
     res.json({
       success: true,
-      message: 'Logged in successfully via OTP.',
+      message: req.body.newPassword ? '🔒 Password updated and logged in successfully!' : 'Logged in successfully via OTP.',
       token,
       user: {
         id: user._id,
-        name: user.name,
+        name: extraMeta.fullName || user.name,
         email: user.email,
         phone: user.phone,
         role: expectedRole || user.role,
-        avatar: user.avatar,
+        avatar: extraMeta.profileImage || user.avatar,
+        profileImage: extraMeta.profileImage || user.avatar,
         ...extraMeta
       }
     });
@@ -577,12 +585,38 @@ export const getMe = async (req, res, next) => {
 // @access  Private
 export const updateUserProfile = async (req, res, next) => {
   try {
-    const { name, phone, avatar, gender, dob, address } = req.body;
+    const { name, email, phone, avatar, gender, dob, address } = req.body;
     // req.user._id is populated by authenticateUser middleware
     const user = await User.findById(req.user._id || req.user.id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (email && email.toLowerCase().trim() !== user.email.toLowerCase().trim()) {
+      const emailNormalized = email.toLowerCase().trim();
+      const existingUser = await User.findOne({ email: emailNormalized, _id: { $ne: user._id } });
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
+      }
+      const oldEmail = user.email;
+      user.email = emailNormalized;
+
+      // Dispatch confirmation email to new email address
+      try {
+        const { sendHtmlEmail } = await import('../utils/emailService.js');
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
+            <h2 style="color: #2563EB; margin-top: 0;">✉️ Email Address Updated</h2>
+            <p style="color: #334155; line-height: 1.5;">Hello <strong>${user.name}</strong>,</p>
+            <p style="color: #334155; line-height: 1.5;">Your NovaKart account email address has been successfully updated from <strong>${oldEmail}</strong> to <strong>${emailNormalized}</strong>.</p>
+            <p style="color: #64748b; font-size: 0.85rem;">If you did not initiate this change, please contact support immediately.</p>
+          </div>
+        `;
+        await sendHtmlEmail(emailNormalized, '✉️ NovaKart Account Email Address Updated', htmlContent);
+      } catch (mailErr) {
+        console.error('Failed to send email update notification:', mailErr);
+      }
     }
 
     if (name !== undefined) user.name = name;
@@ -634,4 +668,3 @@ export const resetPassword = async (req, res, next) => {
     next(error);
   }
 };
-

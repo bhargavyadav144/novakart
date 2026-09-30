@@ -2,9 +2,22 @@ import { Notification } from '../models/Notification.js';
 import { emitToUser } from '../services/socketService.js';
 
 // Helper: Create a notification and emit it in real-time
-export const createNotification = async ({ recipientId, role, title, message, type, link, orderId }) => {
+export const createNotification = async ({ recipientId, role, title, message, type, link, orderId, otpCode, emailSent, emailSubject, emailBody }) => {
   try {
-    const notif = await Notification.create({ recipientId, role, title, message, type: type || 'ORDER_STATUS', link: link || '', orderId: orderId || null });
+    const notif = await Notification.create({
+      recipientId,
+      userId: recipientId,
+      role: role || 'customer',
+      title,
+      message,
+      type: type || 'ORDER_STATUS',
+      link: link || '',
+      orderId: orderId || null,
+      otpCode: otpCode || '',
+      emailSent: Boolean(emailSent),
+      emailSubject: emailSubject || '',
+      emailBody: emailBody || ''
+    });
     // Push to user's browser in real-time
     emitToUser(recipientId, 'new_notification', {
       _id: notif._id,
@@ -12,6 +25,11 @@ export const createNotification = async ({ recipientId, role, title, message, ty
       message: notif.message,
       type: notif.type,
       link: notif.link,
+      orderId: notif.orderId,
+      otpCode: notif.otpCode,
+      emailSent: notif.emailSent,
+      emailSubject: notif.emailSubject,
+      emailBody: notif.emailBody,
       isRead: false,
       createdAt: notif.createdAt,
     });

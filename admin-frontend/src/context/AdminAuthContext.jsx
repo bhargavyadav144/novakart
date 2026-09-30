@@ -6,10 +6,30 @@ const AdminAuthContext = createContext();
 
 export function AdminAuthProvider({ children }) {
   const [adminUser, setAdminUser] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlUser = params.get('auth_user');
+      if (urlUser) {
+        const parsed = JSON.parse(decodeURIComponent(urlUser));
+        localStorage.setItem('novakart_admin_user', JSON.stringify(parsed));
+        return parsed;
+      }
+    } catch (e) {}
     const saved = localStorage.getItem('novakart_admin_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [token, setToken] = useState(() => localStorage.getItem('novakart_admin_token'));
+  const [token, setToken] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get('auth_token');
+      if (urlToken) {
+        localStorage.setItem('novakart_admin_token', urlToken);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return urlToken;
+      }
+    } catch (e) {}
+    return localStorage.getItem('novakart_admin_token');
+  });
   const [loading, setLoading] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
 

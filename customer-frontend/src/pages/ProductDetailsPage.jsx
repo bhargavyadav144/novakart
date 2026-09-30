@@ -66,6 +66,30 @@ export default function ProductDetailsPage() {
   };
 
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [checkPincode, setCheckPincode] = useState('522019');
+  const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [pincodeStatus, setPincodeStatus] = useState(null);
+
+  const handleCheckPincode = async () => {
+    if (!checkPincode || checkPincode.trim().length < 5) {
+      alert('Please enter a valid 6-digit postal pincode.');
+      return;
+    }
+    setPincodeLoading(true);
+    try {
+      const { data } = await api.get('/warehouses/check-serviceability', {
+        params: { pincode: checkPincode.trim() }
+      });
+      setPincodeStatus(data);
+    } catch (err) {
+      setPincodeStatus({
+        isServiceable: false,
+        message: '❌ Error verifying delivery serviceability. Please try again.'
+      });
+    } finally {
+      setPincodeLoading(false);
+    }
+  };
 
   useEffect(() => {
     setActiveMediaIndex(0);
@@ -396,7 +420,46 @@ export default function ProductDetailsPage() {
                 } catch {
                   return user.address;
                 }
-              })()} - Update
+              })()}
+            </div>
+
+            {/* Pincode Delivery Availability Assessor Widget */}
+            <div style={{ marginTop: '10px', marginBottom: '14px', padding: '10px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                <i className="fa-solid fa-truck-ramp-box" style={{ color: '#007185' }}></i> Check Delivery Pincode
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input 
+                  type="text"
+                  placeholder="e.g. 522019"
+                  value={checkPincode}
+                  onChange={(e) => setCheckPincode(e.target.value)}
+                  maxLength={6}
+                  style={{ flex: 1, padding: '6px 10px', fontSize: '0.82rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', background: '#fff' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleCheckPincode}
+                  style={{ padding: '6px 12px', background: '#007185', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '800', cursor: 'pointer' }}
+                >
+                  {pincodeLoading ? 'Checking...' : 'Check'}
+                </button>
+              </div>
+              {pincodeStatus && (
+                <div style={{
+                  marginTop: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: '600',
+                  padding: '6px 8px',
+                  borderRadius: '6px',
+                  lineHeight: '1.3',
+                  background: pincodeStatus.isServiceable ? '#f0fdf4' : (pincodeStatus.status === 'maintenance' ? '#fffbe6' : '#fef2f2'),
+                  color: pincodeStatus.isServiceable ? '#166534' : (pincodeStatus.status === 'maintenance' ? '#b45309' : '#991b1b'),
+                  border: `1px solid ${pincodeStatus.isServiceable ? '#bbf7d0' : (pincodeStatus.status === 'maintenance' ? '#ffe58f' : '#fecaca')}`
+                }}>
+                  {pincodeStatus.message}
+                </div>
+              )}
             </div>
             
             <h4 className="in-stock-text">In stock</h4>

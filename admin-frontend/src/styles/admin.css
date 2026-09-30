@@ -18,7 +18,7 @@ body { font-family: var(--font-main); background-color: var(--admin-bg); color: 
 a { text-decoration: none; color: inherit; }
 
 .admin-layout { display: flex; min-height: 100vh; }
-.admin-sidebar { width: 270px; background: var(--admin-primary); color: #fff; display: flex; flex-direction: column; padding: 24px 0; }
+.admin-sidebar { width: 270px; background: var(--admin-primary); color: #fff; display: flex; flex-direction: column; padding: 24px 0; position: sticky; top: 0; height: 100vh; flex-shrink: 0; align-self: flex-start; z-index: 100; }
 .admin-brand { padding: 0 24px 24px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 1.3rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
 .admin-nav { display: flex; flex-direction: column; gap: 6px; padding: 20px 14px; flex: 1; }
 .admin-nav a { display: flex; align-items: center; gap: 12px; color: #94A3B8; padding: 12px 16px; border-radius: 8px; font-weight: 500; font-size: 0.92rem; }
@@ -34,9 +34,44 @@ a { text-decoration: none; color: inherit; }
 .admin-val { font-size: 1.8rem; font-weight: 800; color: var(--admin-primary); }
 .admin-lbl { font-size: 0.82rem; color: #64748B; font-weight: 600; text-transform: uppercase; }
 
+/* Persistent Scrollbars & Fixed Sticky Table Containers across Admin */
+.data-table-container,
+.table-responsive,
+.table-container {
+  overflow: auto !important;
+  max-height: calc(100vh - 280px);
+  min-height: 380px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  position: relative;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 6px;
+  border: 2px solid #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
 /* Table */
-.data-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid var(--admin-border); }
-.data-table th { background: #F8FAFC; text-align: left; padding: 14px 18px; font-size: 0.85rem; color: #64748B; border-bottom: 1px solid var(--admin-border); }
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid var(--admin-border); }
+.data-table th,
+.fin-table th { position: sticky; top: 0; z-index: 10; background: #F8FAFC; text-align: left; padding: 14px 18px; font-size: 0.85rem; color: #64748B; border-bottom: 2px solid var(--admin-border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .data-table td { padding: 14px 18px; border-bottom: 1px solid var(--admin-border); font-size: 0.9rem; }
 
 /* Action Buttons */

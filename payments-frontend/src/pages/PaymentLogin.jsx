@@ -22,9 +22,26 @@ export default function PaymentLogin() {
     }
   };
 
+  const quickLoginAs = async (emailToUse, passToUse) => {
+    setEmail(emailToUse);
+    setPassword(passToUse);
+    setError('');
+    setLoading(true);
+    try {
+      await login(emailToUse, passToUse);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Login failed. Verify credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const autofillFinance = () => {
-    setEmail('finance@yourstore.com');
-    setPassword('FinanceSecure2026!');
+    quickLoginAs('finance@yourstore.com', 'FinanceSecure2026!');
+  };
+
+  const autofillAdmin = () => {
+    quickLoginAs('admin@yourstore.com', 'AdminSecurePassword2026!');
   };
 
   return (
@@ -89,13 +106,22 @@ export default function PaymentLogin() {
           </button>
         </form>
 
-        <div style={{ marginTop: '22px', paddingTop: '18px', borderTop: '1px solid var(--pay-border)', textAlign: 'center' }}>
+        <div style={{ marginTop: '22px', paddingTop: '18px', borderTop: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button 
             type="button" 
             onClick={autofillFinance}
-            style={{ background: '#F1F5F9', border: '1px dashed #CBD5E1', padding: '8px 14px', borderRadius: '6px', fontSize: '0.78rem', color: '#475569', cursor: 'pointer', fontWeight: '600' }}
+            disabled={loading}
+            style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem', color: '#065F46', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
           >
-            🔑 Quick Fill Finance Officer Credentials
+            ⚡ 1-Click Login as Finance Officer (Instant Demo)
+          </button>
+          <button 
+            type="button" 
+            onClick={autofillAdmin}
+            disabled={loading}
+            style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '8px 14px', borderRadius: '8px', fontSize: '0.8rem', color: '#1E40AF', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            🛡️ 1-Click Login as Master Admin
           </button>
         </div>
       </div>

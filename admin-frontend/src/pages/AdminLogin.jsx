@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
 
 export default function AdminLogin() {
-  const [email, setEmail] = useState('admin@novakart.com');
-  const [password, setPassword] = useState('Admin@NovaKart2026!');
+  const [email, setEmail] = useState('admin@yourstore.com');
+  const [password, setPassword] = useState('AdminSecurePassword2026!');
   const [errorMsg, setErrorMsg] = useState('');
   const { login, loading } = useAdminAuth();
   const navigate = useNavigate();

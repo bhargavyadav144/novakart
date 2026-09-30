@@ -11,6 +11,8 @@ import AdminCustomers from './pages/AdminCustomers';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AdminWarehouses from './pages/AdminWarehouses';
+import AdminReturnsPage from './pages/AdminReturnsPage';
+import AdminHelpCenterPage from './pages/AdminHelpCenterPage';
 import AdminLogin from './pages/AdminLogin';
 
 import './styles/admin.css';
@@ -44,6 +46,8 @@ export default function App() {
           <Route path="/products" element={<ProtectedAdminLayout><AdminProducts /></ProtectedAdminLayout>} />
           <Route path="/orders" element={<ProtectedAdminLayout><AdminOrders /></ProtectedAdminLayout>} />
           <Route path="/warehouses" element={<ProtectedAdminLayout><AdminWarehouses /></ProtectedAdminLayout>} />
+          <Route path="/returns" element={<ProtectedAdminLayout><AdminReturnsPage /></ProtectedAdminLayout>} />
+          <Route path="/help-center" element={<ProtectedAdminLayout><AdminHelpCenterPage /></ProtectedAdminLayout>} />
         </Routes>
       </Router>
     </AdminAuthProvider>

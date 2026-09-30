@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const giftCardSchema = new mongoose.Schema({
   code: { type: String, unique: true, required: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  email: { type: String, default: '', lowercase: true, trim: true },
   amount: { type: Number, default: 50 },
   isActive: { type: Boolean, default: true },
   isUsed: { type: Boolean, default: false },

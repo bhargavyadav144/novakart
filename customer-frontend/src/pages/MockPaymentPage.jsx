@@ -34,25 +34,48 @@ export default function MockPaymentPage() {
   if (!orderPayload) return <div style={{ textAlign: 'center', padding: '50px' }}>Loading transaction gateway...</div>;
 
   // Compute total payable amount with discounts, shipping, etc.
-  const { items, deliveryAddress, giftCardCode, promoCode } = orderPayload;
+  const { items = [], deliveryAddress, giftCardCode, promoCode, appliedGiftCard, promoDiscount: payloadPromoDiscount } = orderPayload;
   
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotal = (items || []).reduce((sum, item) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
   const tax = 199;
-  const shippingFee = 50;
+  const standardShipping = 50;
   const freeDeliveryDiscount = subtotal >= 1000 ? 50 : 0;
+  const shippingFee = standardShipping - freeDeliveryDiscount;
   
   // Calculate promo discount
-  let promoDiscount = 0;
-  if (promoCode === 'NOVAKART20') promoDiscount = 50;
-  else if (promoCode === 'SUPER200') promoDiscount = 200;
-  else if (promoCode === 'FESTIVE100') promoDiscount = 100;
+  let promoDiscount = payloadPromoDiscount || 0;
+  if (!promoDiscount && promoCode) {
+    if (promoCode === 'NOVAKART20') promoDiscount = 50;
+    else if (promoCode === 'SUPER200') promoDiscount = 200;
+    else if (promoCode === 'FESTIVE100') promoDiscount = 100;
+  }
 
-  // We'll verify gift card discount if any was passed
-  const giftCardDiscount = giftCardCode ? 50 : 0; // standard gift card discount
-  const totalPayable = subtotal + tax + shippingFee - freeDeliveryDiscount - promoDiscount - giftCardDiscount;
+  const giftCardDiscount = appliedGiftCard?.amount || (giftCardCode ? 50 : 0);
+  const totalPayable = Math.max(0, subtotal + tax + shippingFee - promoDiscount - giftCardDiscount);
 
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
+
+    if (paymentOption === 'card') {
+      if (!cardNumber || cardNumber.length < 15) {
+        alert('Please enter a valid 16-digit card number.');
+        return;
+      }
+      if (!expiry || expiry.length < 4) {
+        alert('Please enter a valid expiry date (MM/YY).');
+        return;
+      }
+      if (!cvv || cvv.length < 3) {
+        alert('Please enter a valid 3-digit CVV code.');
+        return;
+      }
+    } else if (paymentOption === 'upi') {
+      if (!upiId || !upiId.includes('@')) {
+        alert('Please enter a valid UPI address (e.g. 9876543210@upi or name@okaxis).');
+        return;
+      }
+    }
+
     setProcessing(true);
     setStatusMessage('Contacting bank gateway secure API...');
 
@@ -62,15 +85,31 @@ export default function MockPaymentPage() {
         setStatusMessage('Processing payment confirmation...');
         setTimeout(async () => {
           try {
+            const cleanDeliveryAddress = {
+              fullName: deliveryAddress?.fullName || 'Valued Customer',
+              phone: deliveryAddress?.phone || '9876543210',
+              street: deliveryAddress?.street || 'Main Doorstep Address',
+              city: deliveryAddress?.city || 'Guntur',
+              state: deliveryAddress?.state || 'Andhra Pradesh',
+              pincode: String(deliveryAddress?.pincode || deliveryAddress?.postalCode || '522001').trim(),
+              postalCode: String(deliveryAddress?.postalCode || deliveryAddress?.pincode || '522001').trim(),
+              coordinates: deliveryAddress?.coordinates || { lat: 16.3067, lng: 80.4365 }
+            };
+
             // Finalize order placement via MERN backend
             const finalPayload = {
               ...orderPayload,
+              deliveryAddress: cleanDeliveryAddress,
+              paymentMethod: 'Online Payment (Credit/Debit/UPI)',
               paymentStatus: 'PAID' // Mark paid instantly
             };
+
             const { data } = await api.post('/orders/place', finalPayload);
             
             setSuccess(true);
             setProcessing(false);
+            sessionStorage.removeItem('novakart_applied_gift_card');
+            sessionStorage.removeItem('novakart_applied_coupon');
             localStorage.removeItem('pending_order_payload');
             clearCart();
             
@@ -78,12 +117,13 @@ export default function MockPaymentPage() {
               navigate(`/orders/${data.order._id}/track`);
             }, 1800);
           } catch (err) {
+            console.error('Payment failure:', err);
             alert(err.response?.data?.message || 'Transaction authorization failed on backend server.');
             setProcessing(false);
           }
-        }, 1200);
-      }, 1000);
-    }, 1000);
+        }, 1000);
+      }, 800);
+    }, 800);
   };
 
   return (

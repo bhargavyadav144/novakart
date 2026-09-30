@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import sellerApi, { formatINR } from '../services/sellerApi';
 import StatsMetricCard from '../components/StatsMetricCard';
+import PackageShippingLabelModal from '../components/PackageShippingLabelModal';
+import SellerInvoiceModal from '../components/SellerInvoiceModal';
+import SellerOrderDetailsModal from '../components/SellerOrderDetailsModal';
 import { useSellerAuth } from '../context/SellerAuthContext';
 import { Link } from 'react-router-dom';
 
@@ -9,6 +12,9 @@ export default function SellerDashboard() {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedLabelOrder, setSelectedLabelOrder] = useState(null);
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
+  const [selectedDetailOrder, setSelectedDetailOrder] = useState(null);
 
   const fetchDashboard = () => {
     sellerApi.get('/sellers/dashboard-stats')
@@ -24,17 +30,17 @@ export default function SellerDashboard() {
     fetchDashboard();
   }, []);
 
-  const handleAcceptOrder = async (orderId) => {
+  const handleAcceptOrder = async (order) => {
     try {
-      const { data } = await sellerApi.put(`/orders/seller/${orderId}/accept`);
-      alert(`🎉 Order accepted! Nearby delivery agent dispatch triggered (${data.dispatchResult?.nearbyCount || 1} agents notified).`);
+      const { data } = await sellerApi.put(`/orders/seller/${order._id}/accept`);
+      setSelectedLabelOrder(order);
       fetchDashboard();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to accept order.');
     }
   };
 
-  if (loading) return <p>Loading merchant analytics...</p>;
+  if (loading) return <p style={{ padding: '30px', textAlign: 'center' }}>Loading merchant analytics...</p>;
 
   return (
     <div>
@@ -74,29 +80,95 @@ export default function SellerDashboard() {
                 <th>Items</th>
                 <th>Total (₹)</th>
                 <th>Status</th>
-                <th>Action</th>
+                <th>Fulfillment Action</th>
               </tr>
             </thead>
             <tbody>
               {orders.map(order => (
                 <tr key={order._id}>
-                  <td><strong>{order.orderNumber}</strong></td>
+                  <td>
+                    <strong 
+                      style={{ color: '#1A237E', cursor: 'pointer' }}
+                      onClick={() => setSelectedDetailOrder(order)}
+                      title="Click to view full order details"
+                    >
+                      #{order.orderNumber}
+                    </strong>
+                  </td>
                   <td>{order.deliveryAddress?.fullName || 'Customer'}</td>
                   <td>{order.items?.length} items</td>
                   <td><strong>{formatINR(order.totalAmount)}</strong></td>
                   <td>
                     <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700' }}>
-                      {order.orderStatus}
+                      {order.orderStatus?.replace(/_/g, ' ')}
                     </span>
                   </td>
                   <td>
-                    {order.orderStatus === 'PENDING' ? (
-                      <button className="btn-accept" onClick={() => handleAcceptOrder(order._id)}>
-                        <i className="fa-solid fa-check"></i> Accept &amp; Dispatch Agent
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {order.orderStatus === 'PENDING' ? (
+                        <button className="btn-accept" onClick={() => handleAcceptOrder(order)}>
+                          <i className="fa-solid fa-check"></i> Accept &amp; Print Label
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedLabelOrder(order)}
+                          style={{
+                            background: '#10B981',
+                            color: '#090D16',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontWeight: '800',
+                            fontSize: '0.76rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Reprint package shipping label if lost or misplaced"
+                        >
+                          <i className="fa-solid fa-print"></i> Reprint Label
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => setSelectedInvoiceOrder(order)}
+                        style={{
+                          background: '#1A237E',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.76rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <i className="fa-solid fa-file-invoice"></i> Voucher
                       </button>
-                    ) : (
-                      <span style={{ fontSize: '0.8rem', color: '#10B981', fontWeight: '600' }}>In Transit / Completed</span>
-                    )}
+
+                      <button
+                        onClick={() => setSelectedDetailOrder(order)}
+                        style={{
+                          background: '#F1F5F9',
+                          color: '#334155',
+                          border: '1px solid #CBD5E1',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.76rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <i className="fa-solid fa-eye"></i> Details
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -104,6 +176,33 @@ export default function SellerDashboard() {
           </table>
         )}
       </div>
+
+      {/* Order Details Modal */}
+      {selectedDetailOrder && (
+        <SellerOrderDetailsModal
+          order={selectedDetailOrder}
+          onClose={() => setSelectedDetailOrder(null)}
+          onAccept={handleAcceptOrder}
+          onOpenInvoice={(ord) => setSelectedInvoiceOrder(ord)}
+          onOpenLabel={(ord) => setSelectedLabelOrder(ord)}
+        />
+      )}
+
+      {/* Package Shipping Label Modal */}
+      {selectedLabelOrder && (
+        <PackageShippingLabelModal
+          order={selectedLabelOrder}
+          onClose={() => setSelectedLabelOrder(null)}
+        />
+      )}
+
+      {/* Merchant Invoice / Voucher Modal */}
+      {selectedInvoiceOrder && (
+        <SellerInvoiceModal
+          order={selectedInvoiceOrder}
+          onClose={() => setSelectedInvoiceOrder(null)}
+        />
+      )}
     </div>
   );
 }

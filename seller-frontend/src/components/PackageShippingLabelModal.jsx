@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import { formatINR } from '../services/sellerApi';
 import { formatDateTimeWithSeconds } from './SellerInvoiceModal';
 
 export default function PackageShippingLabelModal({ order, sellerInfo, onClose }) {
-  const barcodeSvgRef = useRef(null);
+  const [barcodeDataUrl, setBarcodeDataUrl] = useState('');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
 
   const orderNum = order?.orderNumber || 'ORD-UNKNOWN';
@@ -13,24 +13,24 @@ export default function PackageShippingLabelModal({ order, sellerInfo, onClose }
   useEffect(() => {
     if (!order) return;
 
-    // Render standard Code 128 Linear Barcode
-    if (barcodeSvgRef.current) {
-      try {
-        JsBarcode(barcodeSvgRef.current, orderNum, {
-          format: 'CODE128',
-          lineColor: '#000000',
-          width: 2.2,
-          height: 52,
-          displayValue: true,
-          font: 'monospace',
-          fontSize: 13,
-          textMargin: 4,
-          margin: 6,
-          background: '#FFFFFF'
-        });
-      } catch (err) {
-        console.warn('JsBarcode render error:', err);
-      }
+    // Render standard Code 128 Linear Barcode as high-res PNG Data URL for 100% reliable printing
+    try {
+      const canvas = document.createElement('canvas');
+      JsBarcode(canvas, orderNum, {
+        format: 'CODE128',
+        lineColor: '#000000',
+        width: 2.4,
+        height: 58,
+        displayValue: true,
+        font: 'monospace',
+        fontSize: 14,
+        textMargin: 4,
+        margin: 6,
+        background: '#FFFFFF'
+      });
+      setBarcodeDataUrl(canvas.toDataURL('image/png'));
+    } catch (err) {
+      console.warn('JsBarcode canvas error:', err);
     }
 
     // Render 2D QR Code
@@ -226,7 +226,11 @@ export default function PackageShippingLabelModal({ order, sellerInfo, onClose }
                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '2px' }}>
                   Linear Package Barcode (Code 128)
                 </span>
-                <svg ref={barcodeSvgRef} style={{ maxWidth: '100%' }}></svg>
+                {barcodeDataUrl ? (
+                  <img src={barcodeDataUrl} alt={`Barcode ${orderNum}`} style={{ height: '58px', width: 'auto', maxWidth: '100%', display: 'block' }} />
+                ) : (
+                  <div style={{ height: '58px', width: '180px', background: '#E2E8F0' }}></div>
+                )}
                 <span style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
                   Rider Scanner Gun: Point at bars to pick
                 </span>

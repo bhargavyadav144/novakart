@@ -77,23 +77,29 @@ export const seedDatabase = async () => {
     }
 
     // 3. Seed Pending Seller (for testing Admin KYC Approval flow)
-    const pendingSellerEmail = 'seller2@freshmart.com';
-    let pendingUser = await User.findOne({ email: pendingSellerEmail });
-    if (!pendingUser) {
-      pendingUser = await User.create({
+    const freshMartEmail = 'seller2@freshmart.com';
+    let freshMartUser = await User.findOne({ email: freshMartEmail });
+    if (!freshMartUser) {
+      freshMartUser = await User.create({
         name: 'Priya Sharma',
-        email: pendingSellerEmail,
+        email: freshMartEmail,
         password: 'SellerSecure123!',
         role: ROLES.SELLER,
         phone: '+91 98223 45678',
         avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80'
       });
+    }
 
-      await Seller.create({
-        userId: pendingUser._id,
+    let freshMartSeller = await Seller.findOne({
+      $or: [{ storeName: /FreshMart/i }, { email: freshMartEmail }]
+    });
+
+    if (!freshMartSeller) {
+      freshMartSeller = await Seller.create({
+        userId: freshMartUser._id,
         storeName: 'FreshMart Organic Groceries',
-        ownerName: pendingUser.name,
-        email: pendingSellerEmail,
+        ownerName: freshMartUser.name,
+        email: freshMartEmail,
         phone: '+91 98223 45678',
         businessAddress: 'Shop 12, Market Square, Sector 15, Noida',
         location: {
@@ -103,10 +109,18 @@ export const seedDatabase = async () => {
           state: 'Uttar Pradesh',
           postalCode: '201301'
         },
-        status: ACCOUNT_STATUSES.PENDING,
-        isApproved: false
+        status: ACCOUNT_STATUSES.APPROVED,
+        isApproved: true,
+        logo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=200&q=80',
+        banner: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80'
       });
-      console.log(`✅ [Seed] Pending KYC Seller Store created: FreshMart Organic Groceries`);
+      console.log(`✅ [Seed] Approved Seller Store created: FreshMart Organic Groceries`);
+    } else {
+      freshMartSeller.status = ACCOUNT_STATUSES.APPROVED;
+      freshMartSeller.isApproved = true;
+      freshMartSeller.storeName = 'FreshMart Organic Groceries';
+      await freshMartSeller.save();
+      console.log(`✅ [Seed] FreshMart Organic Groceries status updated to Approved Merchant.`);
     }
 
 
@@ -349,6 +363,20 @@ export const seedDatabase = async () => {
 
       const insertedProducts = await Product.insertMany(sampleProducts);
       console.log(`✅ [Seed] Successfully seeded ${insertedProducts.length} starter products.`);
+    }
+
+    // Assign all website products to active approved merchant store: FreshMart Organic Groceries
+    if (freshMartSeller) {
+      await Product.updateMany(
+        {},
+        {
+          $set: {
+            sellerId: freshMartSeller._id,
+            location: freshMartSeller.location
+          }
+        }
+      );
+      console.log(`✅ [Seed] All website products linked to Approved Merchant: FreshMart Organic Groceries`);
     }
 
     // Seed Warehouses across AP & TS

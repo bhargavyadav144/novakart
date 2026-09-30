@@ -4,12 +4,15 @@ import DeliveryBottomNav from './DeliveryBottomNav';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import { useDeliveryAuth } from '../context/DeliveryAuthContext';
 
-export default function MobileAppLayout({ children, activeOrdersCount = 0 }) {
-  const { isScanModalOpen, openScanner, closeScanner, fetchStats } = useDeliveryAuth() || {};
+import DraggableSpeedometer from './DraggableSpeedometer';
+
+export default function MobileAppLayout({ children, activeOrdersCount: propCount }) {
+  const { isScanModalOpen, openScanner, closeScanner, fetchActiveCount, activeOrdersCount: contextCount } = useDeliveryAuth() || {};
+  const activeOrdersCount = propCount !== undefined ? propCount : (contextCount || 0);
 
   const handleOrderClaimedFromNavScan = () => {
     if (closeScanner) closeScanner();
-    if (fetchStats) fetchStats();
+    if (fetchActiveCount) fetchActiveCount();
   };
 
   return (
@@ -25,7 +28,10 @@ export default function MobileAppLayout({ children, activeOrdersCount = 0 }) {
           {children}
         </div>
 
-        {/* Bottom Nav with Geometric Shapes */}
+        {/* Draggable Speedometer Circle Badge */}
+        <DraggableSpeedometer />
+
+        {/* Bottom Nav with Labeled Items */}
         <DeliveryBottomNav
           onOpenScanner={openScanner}
           activeOrdersCount={activeOrdersCount}
