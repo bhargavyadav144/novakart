@@ -65,8 +65,8 @@ async function pushToGitHub() {
       ref: 'main',
       force: true,
       onAuth: () => ({
-        username: token,
-        password: ''
+        username: 'bhargavyadav144',
+        password: token
       })
     });
 
