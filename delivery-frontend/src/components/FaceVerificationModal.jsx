@@ -6,18 +6,22 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
   const { agentUser, updateAgentUser } = useDeliveryAuth() || {};
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const nativeCameraInputRef = useRef(null);
 
   const [stream, setStream] = useState(null);
-  const [cameraError, setCameraError] = useState('');
-  const [capturedPhotos, setCapturedPhotos] = useState([]); // [{ angle, dataUrl, trackingId, capturedAt, coords }]
-  const [submitting, setSubmitting] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [cameraError, setCameraError] = useState(''); // '' | 'MOBILE_HTTP' | 'PERMISSION_DENIED' | 'CAMERA_IN_USE' | 'UNSUPPORTED'
+  const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+
+  const [capturedPhotos, setCapturedPhotos] = useState([]); // [{ angle, dataUrl, trackingId, capturedAt, coords, source }]
   const [activeAngle, setActiveAngle] = useState('FRONT'); // 'FRONT' | 'LEFT' | 'RIGHT'
-  const [isScanning, setIsScanning] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [shutterFlash, setShutterFlash] = useState(false);
   const [verifiedResult, setVerifiedResult] = useState(null);
   const [currentCoords, setCurrentCoords] = useState({ lat: 16.3067, lng: 80.4365 });
 
-  // Get agent geolocation for photo tracking
+  // Get agent geolocation for biometric tracking
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -33,7 +37,19 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
     }
   }, []);
 
-  // Web Audio camera shutter sound synthesizer (works anywhere with zero external audio files)
+  // Check for multiple video input devices (front/back camera flip)
+  useEffect(() => {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        if (videoInputs.length > 1) {
+          setHasMultipleCameras(true);
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Web Audio camera shutter sound synthesizer
   const playShutterSound = () => {
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -53,185 +69,274 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
     }
   };
 
-  // Start Camera Stream when Modal opens
-  useEffect(() => {
-    if (!isOpen) {
-      stopCamera();
+  // Start Live WebCam / Video Stream
+  const startLiveCamera = async (mode = facingMode) => {
+    setCameraError('');
+    stopLiveCameraStream();
+
+    const isSecure = typeof window !== 'undefined' && (
+      window.isSecureContext ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.protocol === 'https:'
+    );
+
+    if (!isSecure) {
+      // Over plain HTTP LAN (e.g. mobile accessing 172.16.x.x:3002), browsers block WebRTC getUserMedia
+      setCameraError('MOBILE_HTTP');
+      setIsStreaming(false);
       return;
     }
 
-    let isMounted = true;
-    const startCamera = async () => {
-      setCameraError('');
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error('Camera API (getUserMedia) not supported in this browser environment.');
-        }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError('UNSUPPORTED');
+      setIsStreaming(false);
+      return;
+    }
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
+    try {
+      let mediaStream = null;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
+            facingMode: mode,
             width: { ideal: 720 },
-            height: { ideal: 720 },
-            facingMode: 'user'
+            height: { ideal: 720 }
           },
           audio: false
         });
-
-        if (isMounted) {
-          setStream(mediaStream);
-          if (videoRef.current) {
-            videoRef.current.srcObject = mediaStream;
-          }
-        } else {
-          mediaStream.getTracks().forEach(track => track.stop());
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.warn('Camera access error:', err);
-          setCameraError(err.message || 'Unable to access camera.');
+      } catch (e1) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: mode },
+            audio: false
+          });
+        } catch (e2) {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
         }
       }
-    };
 
-    startCamera();
-
-    return () => {
-      isMounted = false;
-      stopCamera();
-    };
-  }, [isOpen]);
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+      if (mediaStream) {
+        setStream(mediaStream);
+        setIsStreaming(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          videoRef.current.play().catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('Camera stream error:', err);
+      setIsStreaming(false);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('PERMISSION_DENIED');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setCameraError('CAMERA_IN_USE');
+      } else {
+        setCameraError(err.message || 'UNSUPPORTED');
+      }
     }
   };
 
-  // Simulated Test Photo for dev/testing when physical camera is blocked or headless
-  const handleUseSimulatedFace = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 480;
-    canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-
-    // Create rich verified biometric avatar placeholder
-    const grad = ctx.createLinearGradient(0, 0, 480, 480);
-    grad.addColorStop(0, '#0F172A');
-    grad.addColorStop(1, '#1E293B');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 480, 480);
-
-    // Oval face silhouette
-    ctx.fillStyle = '#E2E8F0';
-    ctx.beginPath();
-    ctx.ellipse(240, 230, 110, 150, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = '#1E293B';
-    ctx.beginPath();
-    ctx.arc(200, 200, 14, 0, Math.PI * 2);
-    ctx.arc(280, 200, 14, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Smile
-    ctx.strokeStyle = '#1E293B';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(240, 250, 45, 0.2 * Math.PI, 0.8 * Math.PI);
-    ctx.stroke();
-
-    // Watermark overlay
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.85)';
-    ctx.fillRect(0, 420, 480, 60);
-    ctx.fillStyle = '#090D16';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText(`BIOMETRIC FACE ID • ${new Date().toLocaleTimeString()} • VERIFIED`, 20, 455);
-
-    const testDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    addCapturedPhoto(testDataUrl);
+  const stopLiveCameraStream = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsStreaming(false);
   };
 
-  const addCapturedPhoto = (dataUrl) => {
-    const trackingId = `BIO-TRK-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+  // Toggle Front / Back camera
+  const toggleFacingMode = () => {
+    const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextMode);
+    startLiveCamera(nextMode);
+  };
+
+  // Start stream when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      startLiveCamera();
+    } else {
+      stopLiveCameraStream();
+    }
+    return () => {
+      stopLiveCameraStream();
+    };
+  }, [isOpen]);
+
+  // Stamp Biometric Watermark on Canvas
+  const stampBiometricWatermark = (ctx, w, h, trackingId) => {
+    const barH = 75;
+    const barY = h - barH;
+
+    // Bottom dark gradient strip
+    const grad = ctx.createLinearGradient(0, barY, 0, h);
+    grad.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+    grad.addColorStop(1, 'rgba(15, 23, 42, 0.98)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, barY, w, barH);
+
+    // Top-left live badge
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.92)';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(16, 16, 175, 28, 6) : ctx.rect(16, 16, 175, 28);
+    ctx.fill();
+    ctx.fillStyle = '#064E3B';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('● KYC LIVE BIOMETRIC', 26, 35);
+
+    // Bottom tracking details
+    ctx.fillStyle = '#34D399';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(`NOVAKART FLEET KYC • GPS: ${currentCoords.lat}, ${currentCoords.lng}`, 18, barY + 26);
+
+    ctx.fillStyle = '#E2E8F0';
+    ctx.font = '11px monospace';
+    ctx.fillText(`TRACK-ID: BIO-${trackingId}`, 18, barY + 46);
+
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '11px monospace';
+    ctx.fillText(`TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, 18, barY + 64);
+  };
+
+  // Add captured photo to state
+  const commitPhoto = (dataUrl, source) => {
+    const trackingId = `${Math.random().toString(36).substring(2, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
     const newPhoto = {
       angle: activeAngle,
       dataUrl,
-      trackingId,
+      trackingId: `BIO-${trackingId}`,
       capturedAt: new Date().toISOString(),
-      coords: currentCoords
+      coords: currentCoords,
+      source
     };
 
-    setCapturedPhotos(prev => [...prev, newPhoto]);
+    setCapturedPhotos((prev) => [...prev, newPhoto]);
     playShutterSound();
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 200);
 
+    // Advance angle guide
     if (activeAngle === 'FRONT') setActiveAngle('LEFT');
     else if (activeAngle === 'LEFT') setActiveAngle('RIGHT');
   };
 
-  const handleCapture = () => {
+  // Capture photo from Live In-Browser Video Stream
+  const handleCaptureLiveStream = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-
-    canvas.width = 480;
-    canvas.height = 480;
+    const width = 720;
+    const height = 720;
+    canvas.width = width;
+    canvas.height = height;
 
     const ctx = canvas.getContext('2d');
-    const minDim = Math.min(video.videoWidth || 640, video.videoHeight || 640);
-    const sx = ((video.videoWidth || 640) - minDim) / 2;
-    const sy = ((video.videoHeight || 640) - minDim) / 2;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const minDim = Math.min(vw, vh);
+    const sx = (vw - minDim) / 2;
+    const sy = (vh - minDim) / 2;
 
-    // Draw video feed mirrored
-    ctx.save();
-    ctx.translate(480, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, 480, 480);
-    ctx.restore();
+    if (facingMode === 'user') {
+      ctx.save();
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, width, height);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, width, height);
+    }
 
-    // Add biometric tracking watermark strip
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-    ctx.fillRect(0, 430, 480, 50);
-    ctx.fillStyle = '#10B981';
-    ctx.font = 'bold 13px monospace';
-    ctx.fillText(`NOVAKART FLEET KYC • GPS: ${currentCoords.lat}, ${currentCoords.lng}`, 14, 450);
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '11px monospace';
-    ctx.fillText(`TRACK-ID: BIO-${Date.now().toString(36).toUpperCase()} • ${new Date().toLocaleString('en-IN')}`, 14, 468);
+    const trackingId = `${Math.random().toString(36).substring(2, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    stampBiometricWatermark(ctx, width, height, trackingId);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    addCapturedPhoto(dataUrl);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    commitPhoto(dataUrl, 'live_webcam');
+  };
+
+  // Trigger Native Device Camera Hardware (Mobile or Desktop Native Camera)
+  const triggerNativeCamera = () => {
+    if (nativeCameraInputRef.current) {
+      nativeCameraInputRef.current.click();
+    }
+  };
+
+  // Handle Real Photo captured from Device Native Camera
+  const handleNativeCameraFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current || document.createElement('canvas');
+        const width = 720;
+        const height = 720;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        const iw = img.naturalWidth || img.width;
+        const ih = img.naturalHeight || img.height;
+        const minDim = Math.min(iw, ih);
+        const sx = (iw - minDim) / 2;
+        const sy = (ih - minDim) / 2;
+
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, width, height);
+
+        const trackingId = `${Math.random().toString(36).substring(2, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+        stampBiometricWatermark(ctx, width, height, trackingId);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        commitPhoto(dataUrl, 'device_hardware_camera');
+
+        // Reset file input so user can snap another photo
+        if (nativeCameraInputRef.current) {
+          nativeCameraInputRef.current.value = '';
+        }
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemovePhoto = (index) => {
-    setCapturedPhotos(prev => prev.filter((_, i) => i !== index));
+    setCapturedPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Submit Verified Real Photos to Backend
   const handleSubmitVerification = async () => {
     if (capturedPhotos.length === 0) {
-      alert('Please capture at least 1 frontal face photo for verification.');
+      alert('Please capture at least 1 real face photo before submitting.');
       return;
     }
 
     setSubmitting(true);
     try {
       const primaryPhoto = capturedPhotos[0].dataUrl;
-      const additionalPhotos = capturedPhotos.slice(1).map(p => p.dataUrl);
+      const additionalPhotos = capturedPhotos.slice(1).map((p) => p.dataUrl);
       const trackingMeta = {
         trackingId: capturedPhotos[0].trackingId,
         capturedAt: capturedPhotos[0].capturedAt,
         coordinates: capturedPhotos[0].coords,
         totalAnglesCaptured: capturedPhotos.length,
-        deviceUserAgent: navigator.userAgent
+        deviceUserAgent: navigator.userAgent,
+        captureSource: capturedPhotos[0].source
       };
 
       const res = await deliveryApi.post('/delivery/verify-face', {
         facePhoto: primaryPhoto,
         additionalPhotos,
-        trackingMeta
+        trackingMeta,
+        forceUpdate: true
       });
 
       if (res.data.success) {
@@ -249,7 +354,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
             faceVerifiedAt: res.data.faceVerifiedAt || new Date().toISOString()
           });
         }
-        stopCamera();
+        stopLiveCameraStream();
         if (onVerifiedSuccess) onVerifiedSuccess(res.data);
       }
     } catch (err) {
@@ -268,7 +373,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(15, 23, 42, 0.92)',
+      background: 'rgba(15, 23, 42, 0.94)',
       backdropFilter: 'blur(12px)',
       zIndex: 9999,
       display: 'flex',
@@ -276,6 +381,16 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
       justifyContent: 'center',
       padding: '16px'
     }}>
+      {/* Hidden real camera file input for native mobile/desktop hardware camera capture */}
+      <input
+        ref={nativeCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        onChange={handleNativeCameraFile}
+        style={{ display: 'none' }}
+      />
+
       <div style={{
         background: '#0F172A',
         border: '1px solid #334155',
@@ -289,7 +404,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
         flexDirection: 'column',
         position: 'relative'
       }}>
-        {/* Shutter flash overlay animation */}
+        {/* Shutter flash animation overlay */}
         {shutterFlash && (
           <div style={{
             position: 'absolute',
@@ -300,7 +415,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
             background: '#FFFFFF',
             zIndex: 100,
             pointerEvents: 'none',
-            opacity: 0.8,
+            opacity: 0.85,
             transition: 'opacity 0.2s'
           }} />
         )}
@@ -327,11 +442,11 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
               fontSize: '1.2rem',
               fontWeight: '900'
             }}>
-              <i className="fa-solid fa-user-shield"></i>
+              <i className="fa-solid fa-camera"></i>
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#FFF' }}>
-                Face Authentication &amp; KYC
+                Real Camera Verification
               </h3>
               <p style={{ margin: 0, fontSize: '0.7rem', color: '#94A3B8' }}>
                 Live Biometric Capture &bull; Photo Audit Tracking
@@ -339,7 +454,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
             </div>
           </div>
           <button
-            onClick={() => { stopCamera(); onClose(); }}
+            onClick={() => { stopLiveCameraStream(); onClose(); }}
             style={{
               background: 'rgba(255,255,255,0.08)',
               color: '#94A3B8',
@@ -348,7 +463,10 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
               width: '32px',
               height: '32px',
               fontSize: '1.2rem',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
           >
             &times;
@@ -369,16 +487,17 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
               justifyContent: 'center',
               fontSize: '2.4rem',
               margin: '0 auto 16px auto',
-              border: '2px solid #10B981'
+              border: '2px solid #10B981',
+              boxShadow: '0 0 25px rgba(16, 185, 129, 0.35)'
             }}>
               <i className="fa-solid fa-circle-check"></i>
             </div>
 
             <h2 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#FFF', margin: '0 0 6px 0' }}>
-              Face Verified &amp; Tracked!
+              Real Face Verified &amp; Tracked!
             </h2>
             <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: '0 0 20px 0' }}>
-              Your live biometric photo has been permanently locked into NovaKart KYC ledger.
+              Your real biometric camera photo has been permanently verified and recorded into your delivery profile.
             </p>
 
             {/* Tracked Photo Card */}
@@ -395,7 +514,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
             }}>
               <img
                 src={verifiedResult.photo}
-                alt="Tracked Biometric Face"
+                alt="Verified Biometric Face"
                 style={{
                   width: '90px',
                   height: '90px',
@@ -439,42 +558,10 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
             </button>
           </div>
         ) : (
-          /* Live Camera View & Capture */
+          /* Camera View & Capture Screen */
           <div style={{ padding: '20px', textAlign: 'center' }}>
-            {cameraError ? (
-              <div style={{
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid #EF4444',
-                borderRadius: '18px',
-                padding: '24px 16px',
-                color: '#FCA5A5',
-                marginBottom: '16px'
-              }}>
-                <i className="fa-solid fa-video-slash" style={{ fontSize: '2.5rem', marginBottom: '12px', color: '#EF4444' }}></i>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#FFF', margin: '0 0 6px 0' }}>
-                  Camera Permission Required
-                </h4>
-                <p style={{ fontSize: '0.76rem', margin: '0 0 14px 0', lineHeight: '1.4' }}>
-                  {cameraError}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleUseSimulatedFace}
-                  style={{
-                    background: '#10B981',
-                    color: '#090D16',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontWeight: '800',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ⚡ Use Demo Camera Photo Snapshot
-                </button>
-              </div>
-            ) : (
+            {/* Live Video Viewfinder when stream is active */}
+            {isStreaming ? (
               <div style={{
                 position: 'relative',
                 width: '270px',
@@ -491,11 +578,15 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
                   autoPlay
                   playsInline
                   muted
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    transform: facingMode === 'user' ? 'scaleX(-1)' : 'none'
+                  }}
                 />
-                <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-                {/* Oval Face Guide */}
+                {/* Oval Face Guide Overlay */}
                 <div style={{
                   position: 'absolute',
                   top: 0,
@@ -519,18 +610,16 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
                     position: 'relative'
                   }}>
                     {/* Animated scanning laser line */}
-                    {isScanning && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '15%',
-                        left: '5%',
-                        right: '5%',
-                        height: '2px',
-                        background: 'linear-gradient(90deg, transparent, #34D399, transparent)',
-                        boxShadow: '0 0 10px #34D399',
-                        animation: 'scanBeam 2s infinite ease-in-out'
-                      }} />
-                    )}
+                    <div style={{
+                      position: 'absolute',
+                      top: '15%',
+                      left: '5%',
+                      right: '5%',
+                      height: '2px',
+                      background: 'linear-gradient(90deg, transparent, #34D399, transparent)',
+                      boxShadow: '0 0 10px #34D399',
+                      animation: 'scanBeam 2s infinite ease-in-out'
+                    }} />
 
                     <span style={{
                       fontSize: '0.62rem',
@@ -566,36 +655,151 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
                   whiteSpace: 'nowrap'
                 }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', boxShadow: '0 0 6px #10B981' }}></span>
-                  FACE TRACK: 99.4% LOCK
+                  REAL WEBCAM ACTIVE
                 </div>
+
+                {/* Flip camera button if multiple cameras detected */}
+                {hasMultipleCameras && (
+                  <button
+                    type="button"
+                    onClick={toggleFacingMode}
+                    style={{
+                      position: 'absolute',
+                      bottom: '12px',
+                      right: '12px',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      border: '1px solid #334155',
+                      color: '#FFF',
+                      borderRadius: '50%',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem'
+                    }}
+                    title="Flip Camera"
+                  >
+                    <i className="fa-solid fa-camera-rotate"></i>
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* Real Device Camera Card (Always working on mobile HTTP LAN & desktop) */
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                border: '1px solid #334155',
+                borderRadius: '20px',
+                padding: '24px 20px',
+                color: '#FFF',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10B981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '2.5rem',
+                  margin: '0 auto 16px auto',
+                  border: '2px solid #10B981',
+                  boxShadow: '0 0 25px rgba(16, 185, 129, 0.3)'
+                }}>
+                  <i className="fa-solid fa-camera"></i>
+                </div>
+
+                <div style={{ display: 'inline-block', background: '#064E3B', color: '#34D399', fontSize: '0.72rem', fontWeight: '800', padding: '4px 10px', borderRadius: '20px', marginBottom: '10px' }}>
+                  <i className="fa-solid fa-shield-halved"></i> REAL CAMERA HARDWARE READY
+                </div>
+
+                <h4 style={{ fontSize: '1.05rem', fontWeight: '800', margin: '0 0 8px 0', color: '#FFF' }}>
+                  Capture Real Face Photo
+                </h4>
+
+                <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: '0 0 20px 0', lineHeight: '1.5' }}>
+                  {cameraError === 'MOBILE_HTTP'
+                    ? 'Mobile local network mode active. Tap the button below to launch your phone camera and capture your live KYC face photo.'
+                    : 'Your device camera is ready. Tap below to launch your camera hardware and take your live biometric photo.'}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={triggerNativeCamera}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    color: '#090D16',
+                    border: 'none',
+                    borderRadius: '14px',
+                    fontWeight: '900',
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
+                  }}
+                >
+                  <i className="fa-solid fa-camera" style={{ fontSize: '1.1rem' }}></i>
+                  Open Camera &amp; Take Photo
+                </button>
+
+                {cameraError !== 'MOBILE_HTTP' && (
+                  <button
+                    type="button"
+                    onClick={() => startLiveCamera()}
+                    style={{
+                      marginTop: '12px',
+                      background: 'transparent',
+                      color: '#94A3B8',
+                      border: 'none',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    <i className="fa-solid fa-rotate-right"></i> Retry In-Screen Live Video Stream
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Instruction strip */}
+            {/* Hidden canvas for processing */}
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+            {/* Position Angle Strip */}
             <div style={{ marginTop: '16px' }}>
               <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#F1F5F9' }}>
                 Position: <span style={{ color: '#10B981' }}>{activeAngle} ANGLE</span>
               </div>
               <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '4px 0 0 0' }}>
-                Keep your head steady inside the green guide oval &amp; tap <strong>Capture Photo</strong>.
+                {capturedPhotos.length === 0
+                  ? 'Keep your head steady facing forward & take your real face photo.'
+                  : `Angle ${capturedPhotos.length}/3 captured. Take another angle or submit now.`}
               </p>
             </div>
 
-            {/* Captured Photos Strip */}
+            {/* Captured Real Photos Strip */}
             {capturedPhotos.length > 0 && (
-              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', gap: '12px', alignItems: 'center' }}>
                 {capturedPhotos.map((photo, idx) => (
                   <div key={idx} style={{ position: 'relative' }}>
                     <img
                       src={photo.dataUrl}
-                      alt={`Biometric Capture ${idx + 1}`}
+                      alt={`Real Biometric Capture ${idx + 1}`}
                       style={{
-                        width: '56px',
-                        height: '56px',
+                        width: '58px',
+                        height: '58px',
                         borderRadius: '50%',
                         objectFit: 'cover',
                         border: '2px solid #10B981',
-                        boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
+                        boxShadow: '0 2px 10px rgba(16,185,129,0.35)'
                       }}
                     />
                     <span style={{
@@ -607,7 +811,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
                       color: '#34D399',
                       fontSize: '0.55rem',
                       fontWeight: '800',
-                      padding: '1px 4px',
+                      padding: '1px 5px',
                       borderRadius: '4px',
                       border: '1px solid #10B981',
                       whiteSpace: 'nowrap'
@@ -615,6 +819,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
                       {photo.angle}
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleRemovePhoto(idx)}
                       style={{
                         position: 'absolute',
@@ -632,6 +837,7 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}
+                      title="Remove photo"
                     >
                       &times;
                     </button>
@@ -646,59 +852,112 @@ export default function FaceVerificationModal({ isOpen, onClose, onVerifiedSucce
               paddingTop: '16px',
               borderTop: '1px solid #334155',
               display: 'flex',
+              flexDirection: 'column',
               gap: '10px'
             }}>
-              <button
-                type="button"
-                onClick={handleCapture}
-                disabled={capturedPhotos.length >= 3}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: capturedPhotos.length >= 3 ? '#334155' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                  color: '#090D16',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontWeight: '900',
-                  fontSize: '0.88rem',
-                  cursor: capturedPhotos.length >= 3 ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-                }}
-              >
-                <i className="fa-solid fa-camera"></i> Capture Photo ({capturedPhotos.length}/3)
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSubmitVerification}
-                disabled={capturedPhotos.length === 0 || submitting}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: capturedPhotos.length === 0 ? '#1E293B' : '#2563EB',
-                  color: capturedPhotos.length === 0 ? '#64748B' : '#FFF',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontWeight: '900',
-                  fontSize: '0.88rem',
-                  cursor: capturedPhotos.length === 0 || submitting ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: capturedPhotos.length > 0 ? '0 4px 12px rgba(37,99,235,0.4)' : 'none'
-                }}
-              >
-                {submitting ? (
-                  <><i className="fa-solid fa-circle-notch fa-spin"></i> Submitting KYC...</>
+              {/* Primary Capture Buttons */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={handleCaptureLiveStream}
+                    disabled={capturedPhotos.length >= 3}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: capturedPhotos.length >= 3 ? '#334155' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#090D16',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: '900',
+                      fontSize: '0.88rem',
+                      cursor: capturedPhotos.length >= 3 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    <i className="fa-solid fa-camera"></i> Capture Live Frame ({capturedPhotos.length}/3)
+                  </button>
                 ) : (
-                  <><i className="fa-solid fa-shield-check"></i> Submit &amp; Verify</>
+                  <button
+                    type="button"
+                    onClick={triggerNativeCamera}
+                    disabled={capturedPhotos.length >= 3}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: capturedPhotos.length >= 3 ? '#334155' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: '#090D16',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: '900',
+                      fontSize: '0.88rem',
+                      cursor: capturedPhotos.length >= 3 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    <i className="fa-solid fa-camera"></i> Snap Photo with Camera ({capturedPhotos.length}/3)
+                  </button>
                 )}
-              </button>
+
+                <button
+                  type="button"
+                  onClick={handleSubmitVerification}
+                  disabled={capturedPhotos.length === 0 || submitting}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: capturedPhotos.length === 0 ? '#1E293B' : '#2563EB',
+                    color: capturedPhotos.length === 0 ? '#64748B' : '#FFF',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontWeight: '900',
+                    fontSize: '0.88rem',
+                    cursor: capturedPhotos.length === 0 || submitting ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: capturedPhotos.length > 0 ? '0 4px 12px rgba(37,99,235,0.4)' : 'none'
+                  }}
+                >
+                  {submitting ? (
+                    <><i className="fa-solid fa-circle-notch fa-spin"></i> Verifying KYC...</>
+                  ) : (
+                    <><i className="fa-solid fa-shield-check"></i> Submit &amp; Verify</>
+                  )}
+                </button>
+              </div>
+
+              {/* Extra button to launch native hardware camera app even if streaming */}
+              {isStreaming && (
+                <button
+                  type="button"
+                  onClick={triggerNativeCamera}
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    color: '#94A3B8',
+                    border: '1px dashed #475569',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <i className="fa-solid fa-mobile-screen"></i> Or Snap with Phone Hardware Camera App
+                </button>
+              )}
             </div>
           </div>
         )}

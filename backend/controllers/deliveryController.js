@@ -639,13 +639,7 @@ export const verifyFacePhoto = async (req, res, next) => {
     const agent = await DeliveryAgent.findOne({ userId: req.user._id });
     if (!agent) return res.status(404).json({ success: false, message: 'Delivery agent profile not found.' });
 
-    // Enforce Immortality/Immutability of verified face photo
-    if (agent.isFaceVerified && agent.faceVerificationPhoto) {
-      return res.status(400).json({
-        success: false,
-        message: '🔒 Face Verification is already completed and locked. Verified biometric photos cannot be modified or replaced.'
-      });
-    }
+    // Update or set verified face photo with latest live camera biometric capture
 
     agent.isFaceVerified = true;
     agent.faceVerificationPhoto = facePhoto;
