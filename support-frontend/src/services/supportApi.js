@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-export const API_BASE_URL = 'http://localhost:5050/api';
-export const SOCKET_BASE_URL = 'http://localhost:5050';
+const envApiUrl = import.meta.env?.VITE_API_BASE_URL;
+export const API_BASE_URL = envApiUrl ? `${envApiUrl}/api` : 'http://localhost:5050/api';
+export const SOCKET_BASE_URL = envApiUrl || 'http://localhost:5050';
 
 const supportApi = axios.create({
   baseURL: API_BASE_URL,

@@ -3,12 +3,13 @@ import axios from 'axios';
 const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
 
-let apiHost = isHttps ? window.location.origin : `http://${hostname}:5050`;
-if (hostname.includes('loca.lt')) {
+const envApiUrl = import.meta.env?.VITE_API_BASE_URL;
+let apiHost = envApiUrl || (isHttps ? window.location.origin : `http://${hostname}:5050`);
+if (!envApiUrl && hostname.includes('loca.lt')) {
   apiHost = 'https://cruel-llamas-build.loca.lt';
 }
 
-export const API_BASE_URL = isHttps ? '/api' : `${apiHost}/api`;
+export const API_BASE_URL = envApiUrl ? `${envApiUrl}/api` : (isHttps ? '/api' : `${apiHost}/api`);
 export const SOCKET_BASE_URL = apiHost;
 
 

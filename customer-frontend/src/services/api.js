@@ -1,9 +1,10 @@
 import axios from 'axios';
 
+const envApiUrl = import.meta.env?.VITE_API_BASE_URL;
 const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
 
-let apiHost = `http://${hostname}:5050`;
-if (hostname.includes('loca.lt')) {
+let apiHost = envApiUrl || `http://${hostname}:5050`;
+if (!envApiUrl && hostname.includes('loca.lt')) {
   apiHost = 'https://cruel-llamas-build.loca.lt';
 }
 
