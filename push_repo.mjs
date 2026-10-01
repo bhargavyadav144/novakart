@@ -56,19 +56,35 @@ async function pushToGitHub() {
       console.log('ℹ️ No new changes to commit. Proceeding with existing commits.');
     }
 
-    console.log('🚀 Pushing to https://github.com/bhargavyadav144/novakart.git (main branch)...');
-    const pushResult = await git.push({
-      fs,
-      http,
-      dir,
-      remote: 'origin',
-      ref: 'main',
-      force: true,
-      onAuth: () => ({
-        username: 'bhargavyadav144',
-        password: token
-      })
-    });
+    let pushResult;
+    try {
+      pushResult = await git.push({
+        fs,
+        http,
+        dir,
+        remote: 'origin',
+        ref: 'main',
+        force: true,
+        onAuth: () => ({
+          username: token,
+          password: ''
+        })
+      });
+    } catch (pushErr) {
+      // Retry with username + token
+      pushResult = await git.push({
+        fs,
+        http,
+        dir,
+        remote: 'origin',
+        ref: 'main',
+        force: true,
+        onAuth: () => ({
+          username: 'bhargavyadav144',
+          password: token
+        })
+      });
+    }
 
     console.log('\n========================================================================');
     console.log('✅ SUCCESS: All files successfully pushed to GitHub!');
