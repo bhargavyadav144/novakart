@@ -35,18 +35,9 @@ export default function BarcodeScannerModal({ isOpen, onClose, onOrderClaimed })
   const scannerRef = useRef(null);
   const isStartingRef = useRef(false);
 
-  const handleSwitchToHttps = () => {
-    try {
-      const token = localStorage.getItem('novakart_delivery_token') || '';
-      const user = localStorage.getItem('novakart_delivery_user') || '';
-      let target = `https://${window.location.hostname}:3002${window.location.pathname}`;
-      if (token) {
-        target += `?auth_token=${encodeURIComponent(token)}&auth_user=${encodeURIComponent(user)}`;
-      }
-      window.location.href = target;
-    } catch (e) {
-      window.location.protocol = 'https:';
-    }
+  const handleRetryCamera = () => {
+    setCameraError('');
+    startCamera();
   };
 
 
@@ -769,7 +760,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onOrderClaimed })
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '280px' }}>
                     <button
                       type="button"
-                      onClick={handleSwitchToHttps}
+                      onClick={handleRetryCamera}
                       style={{
                         background: 'linear-gradient(135deg, #10B981, #059669)',
                         color: '#FFFFFF',
@@ -786,7 +777,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onOrderClaimed })
                         boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
                       }}
                     >
-                      <i className="fa-solid fa-shield-halved"></i> Open Secure HTTPS Camera
+                      <i className="fa-solid fa-camera"></i> Retry Camera Permission
                     </button>
 
                     <div style={{ display: 'flex', gap: '6px' }}>

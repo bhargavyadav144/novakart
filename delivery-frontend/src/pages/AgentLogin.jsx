@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDeliveryAuth } from '../context/DeliveryAuthContext';
 import deliveryApi from '../services/deliveryApi';
-import MobileConnectModal from '../components/MobileConnectModal';
 
 export default function AgentLogin() {
   const [loginMode, setLoginMode] = useState('password'); // 'password' | 'otp'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
 
   // OTP State
   const [otpEmail, setOtpEmail] = useState('');
@@ -484,8 +482,6 @@ export default function AgentLogin() {
             Visit Hub for Onboarding
           </Link>
         </div>
-
-        <MobileConnectModal isOpen={isMobileModalOpen} onClose={() => setIsMobileModalOpen(false)} />
       </div>
     </div>
   );

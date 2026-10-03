@@ -3,7 +3,6 @@ import { useDeliveryAuth } from '../context/DeliveryAuthContext';
 import deliveryApi, { formatINR } from '../services/deliveryApi';
 import RadarOfferCard from '../components/RadarOfferCard';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
-import MobileConnectModal from '../components/MobileConnectModal';
 import FaceVerificationModal from '../components/FaceVerificationModal';
 import TrackedPhotoModal from '../components/TrackedPhotoModal';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +15,6 @@ export default function DutyDashboard() {
   const [lat, setLat] = useState('16.3067');
   const [lng, setLng] = useState('80.4365');
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
-  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
   const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
   const [isTrackedPhotoOpen, setIsTrackedPhotoOpen] = useState(false);
   const navigate = useNavigate();
@@ -476,14 +474,6 @@ export default function DutyDashboard() {
           photoUrl={agentUser?.faceVerificationPhoto}
           verifiedAt={agentUser?.faceVerifiedAt}
           agentName={agentUser?.fullName}
-        />
-      )}
-
-      {/* Mobile Connect & QR Code Modal */}
-      {isMobileModalOpen && (
-        <MobileConnectModal
-          isOpen={isMobileModalOpen}
-          onClose={() => setIsMobileModalOpen(false)}
         />
       )}
 

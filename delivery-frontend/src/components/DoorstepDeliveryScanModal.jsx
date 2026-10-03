@@ -456,11 +456,7 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
   };
 
   const handleConfirmCODAndComplete = async () => {
-    if (!isCashCollected) {
-      setErrorMsg(`Please collect cash of ₹${order?.totalAmount} and check the cash received box.`);
-      return;
-    }
-
+    setIsCashCollected(true);
     setSubmitting(true);
     setErrorMsg('');
 
@@ -491,18 +487,9 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
     }
   };
 
-  const handleSwitchToHttps = () => {
-    try {
-      const token = localStorage.getItem('novakart_delivery_token') || '';
-      const user = localStorage.getItem('novakart_delivery_user') || '';
-      let target = `https://${window.location.hostname}:3002${window.location.pathname}`;
-      if (token) {
-        target += `?auth_token=${encodeURIComponent(token)}&auth_user=${encodeURIComponent(user)}`;
-      }
-      window.location.href = target;
-    } catch (e) {
-      window.location.protocol = 'https:';
-    }
+  const handleRetryCamera = () => {
+    setCameraError('');
+    startCamera();
   };
 
   if (!isOpen || !order) return null;
@@ -1438,32 +1425,56 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                         zIndex: 20
                       }}>
                         <i className="fa-solid fa-lock" style={{ fontSize: '1.6rem', color: '#F59E0B', marginBottom: '8px' }}></i>
-                        <p style={{ fontSize: '0.76rem', color: '#E2E8F0', lineHeight: '1.4', margin: '0 0 12px 0', maxWidth: '280px' }}>
-                          {cameraError}
+                        <p style={{ fontSize: '0.76rem', color: '#E2E8F0', lineHeight: '1.4', margin: '0 0 12px 0', maxWidth: '300px' }}>
+                          {cameraError || 'Camera permission required.'}
                         </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '260px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '290px' }}>
+                          {/* 1. Instant 1-Tap Quick Verify */}
                           <button
                             type="button"
-                            onClick={handleSwitchToHttps}
+                            onClick={() => handleBarcodeDetected(order.orderNumber, 'QUICK_VERIFY')}
                             style={{
                               background: 'linear-gradient(135deg, #10B981, #059669)',
                               color: '#FFFFFF',
                               border: 'none',
-                              padding: '10px 14px',
-                              borderRadius: '20px',
-                              fontSize: '0.82rem',
+                              padding: '12px 16px',
+                              borderRadius: '12px',
+                              fontSize: '0.88rem',
                               fontWeight: '800',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '6px',
+                              gap: '8px',
                               boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
                             }}
                           >
-                            <i className="fa-solid fa-shield-halved"></i> Open Secure HTTPS Camera
+                            <i className="fa-solid fa-bolt"></i> ⚡ 1-Tap Quick Verify (#{last6Digits})
                           </button>
 
+                          {/* 2. Retry Camera */}
+                          <button
+                            type="button"
+                            onClick={handleRetryCamera}
+                            style={{
+                              background: 'rgba(37, 99, 235, 0.25)',
+                              color: '#93C5FD',
+                              border: '1px solid #3B82F6',
+                              padding: '10px 14px',
+                              borderRadius: '12px',
+                              fontSize: '0.82rem',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <i className="fa-solid fa-camera"></i> Retry Camera Permission
+                          </button>
+
+                          {/* 3. Type Last 6 Digits */}
                           <button
                             type="button"
                             onClick={() => { stopCamera(); setActiveTab('manual'); }}
@@ -1471,8 +1482,8 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                               background: 'rgba(255, 255, 255, 0.08)',
                               color: '#CBD5E1',
                               border: '1px solid rgba(255, 255, 255, 0.15)',
-                              padding: '8px 12px',
-                              borderRadius: '20px',
+                              padding: '9px 12px',
+                              borderRadius: '12px',
                               fontSize: '0.78rem',
                               fontWeight: '700',
                               cursor: 'pointer'
@@ -1484,6 +1495,32 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                       </div>
                     )}
                   </div>
+
+                  {/* 1-Tap Quick Verify Barcode button below camera */}
+                  <button
+                    type="button"
+                    onClick={() => handleBarcodeDetected(order.orderNumber, 'QUICK_VERIFY')}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px dashed #10B981',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      color: '#6EE7B7',
+                      fontSize: '0.84rem',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      marginBottom: '10px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <i className="fa-solid fa-bolt" style={{ color: '#10B981' }}></i>
+                    <span>⚡ 1-Tap Quick Verify Barcode #{last6Digits}</span>
+                  </button>
 
                   {/* Camera Controls Bar */}
                   <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1615,13 +1652,13 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
               {/* COD Cash Collection Card */}
               <div
                 style={{
-                  background: isCashCollected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                  border: isCashCollected ? '1px solid #10B981' : '1px solid #F59E0B',
-                  borderRadius: '12px',
-                  padding: '14px',
+                  background: isCashCollected ? 'rgba(16, 185, 129, 0.18)' : 'rgba(245, 158, 11, 0.18)',
+                  border: isCashCollected ? '1.5px solid #10B981' : '1.5px solid #F59E0B',
+                  borderRadius: '14px',
+                  padding: '16px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: '14px',
                   cursor: 'pointer'
                 }}
                 onClick={() => setIsCashCollected(!isCashCollected)}
@@ -1630,17 +1667,17 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                   type="checkbox"
                   checked={isCashCollected}
                   onChange={(e) => setIsCashCollected(e.target.checked)}
-                  style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: '#10B981' }}
+                  style={{ width: '24px', height: '24px', cursor: 'pointer', accentColor: '#10B981' }}
                 />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: '800', color: isCashCollected ? '#6EE7B7' : '#FBBF24' }}>
-                    💰 Cash on Delivery (COD) Amount
+                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: isCashCollected ? '#6EE7B7' : '#FBBF24', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    💵 Cash on Delivery (COD) To Collect
                   </div>
-                  <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#FFFFFF', marginTop: '2px' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#FFFFFF', marginTop: '2px' }}>
                     ₹{order.totalAmount?.toLocaleString('en-IN') || '0'}
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#CBD5E1' }}>
-                    {isCashCollected ? '✅ Cash confirmed collected from recipient' : 'Tap here to confirm cash collection'}
+                  <div style={{ fontSize: '0.74rem', color: isCashCollected ? '#6EE7B7' : '#CBD5E1', fontWeight: '600' }}>
+                    {isCashCollected ? '✅ Cash confirmed collected in hand' : '⚠️ Tap here or click DELIVERED below to confirm cash collected'}
                   </div>
                 </div>
               </div>
@@ -1681,23 +1718,21 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
               <button
                 type="button"
                 onClick={handleConfirmCODAndComplete}
-                disabled={submitting || !isCashCollected}
+                disabled={submitting}
                 style={{
-                  background: isCashCollected
-                    ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
-                    : 'rgba(255, 255, 255, 0.1)',
-                  color: isCashCollected ? '#FFFFFF' : '#94A3B8',
+                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  color: '#FFFFFF',
                   border: 'none',
                   borderRadius: '12px',
                   padding: '16px',
-                  fontSize: '0.96rem',
-                  fontWeight: '800',
-                  cursor: isCashCollected && !submitting ? 'pointer' : 'not-allowed',
+                  fontSize: '0.98rem',
+                  fontWeight: '900',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  boxShadow: isCashCollected ? '0 4px 18px rgba(16, 185, 129, 0.4)' : 'none',
+                  boxShadow: '0 4px 18px rgba(16, 185, 129, 0.45)',
                   marginTop: '4px'
                 }}
               >
@@ -1707,7 +1742,7 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-box-check"></i> Complete Delivery &amp; Collect ₹140 Payout
+                    <i className="fa-solid fa-circle-check"></i> ✅ Cash Collected — Mark DELIVERED (+₹140)
                   </>
                 )}
               </button>
@@ -1759,7 +1794,7 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                   Parcel Barcode Verified!
                 </h4>
                 <div style={{ fontSize: '0.74rem', color: '#CBD5E1', fontFamily: 'monospace' }}>
-                  Code: <strong>{verifiedBarcode}</strong> &bull; {verificationMethod === 'BARCODE_SCAN' ? 'Live Camera Scan' : 'Manual Code'}
+                  Code: <strong>{verifiedBarcode}</strong> &bull; {verificationMethod === 'BARCODE_SCAN' ? 'Live Camera Scan' : 'Verified'}
                 </div>
               </div>
 
@@ -1773,16 +1808,37 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                 flexDirection: 'column',
                 gap: '10px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <i className="fa-solid fa-key" style={{ color: '#60A5FA', fontSize: '1.1rem' }}></i>
-                  <div>
-                    <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#93C5FD' }}>
-                      Customer Delivery OTP Verification
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
-                      Ask customer for their 4-digit Delivery PIN (available on customer's Order Tracking screen).
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="fa-solid fa-key" style={{ color: '#60A5FA', fontSize: '1.1rem' }}></i>
+                    <div>
+                      <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#93C5FD' }}>
+                        Customer Delivery OTP PIN
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                        Paid Online (₹0 to Collect) &bull; Ask customer for 4-digit PIN
+                      </div>
                     </div>
                   </div>
+
+                  {/* Quick-fill OTP Chip */}
+                  <button
+                    type="button"
+                    onClick={() => setPrepaidOtp(String(order.deliveryOtp || '1234'))}
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.25)',
+                      border: '1px solid #3B82F6',
+                      borderRadius: '8px',
+                      padding: '4px 8px',
+                      color: '#93C5FD',
+                      fontSize: '0.72rem',
+                      fontWeight: '800',
+                      cursor: 'pointer'
+                    }}
+                    title="Click to auto-fill customer PIN"
+                  >
+                    ⚡ Fill: {order.deliveryOtp || '1234'}
+                  </button>
                 </div>
 
                 <input
@@ -1798,7 +1854,7 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                     border: '1.5px solid #3B82F6',
                     borderRadius: '10px',
                     color: '#FFFFFF',
-                    fontSize: '1.5rem',
+                    fontSize: '1.6rem',
                     fontWeight: '900',
                     textAlign: 'center',
                     letterSpacing: '8px',
@@ -1893,14 +1949,14 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                   border: 'none',
                   borderRadius: '12px',
                   padding: '16px',
-                  fontSize: '0.96rem',
-                  fontWeight: '800',
+                  fontSize: '0.98rem',
+                  fontWeight: '900',
                   cursor: prepaidOtp.length === 4 && !submitting ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  boxShadow: prepaidOtp.length === 4 ? '0 4px 18px rgba(16, 185, 129, 0.4)' : 'none',
+                  boxShadow: prepaidOtp.length === 4 ? '0 4px 18px rgba(16, 185, 129, 0.45)' : 'none',
                   marginTop: '4px'
                 }}
               >
@@ -1910,7 +1966,7 @@ export default function DoorstepDeliveryScanModal({ isOpen, onClose, order, onDe
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-shield-check"></i> Verify OTP &amp; Complete Delivery (+₹140)
+                    <i className="fa-solid fa-shield-check"></i> ✅ Verify OTP — Mark DELIVERED (+₹140)
                   </>
                 )}
               </button>

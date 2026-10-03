@@ -3,7 +3,6 @@ import deliveryApi from '../services/deliveryApi';
 import { useDeliveryAuth } from '../context/DeliveryAuthContext';
 import FaceVerificationModal from '../components/FaceVerificationModal';
 import TrackedPhotoModal from '../components/TrackedPhotoModal';
-import MobileConnectModal from '../components/MobileConnectModal';
 
 export default function RiderProfilePage() {
   const { agentUser, updateAgentUser } = useDeliveryAuth() || {};
@@ -12,7 +11,6 @@ export default function RiderProfilePage() {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security' | 'fleet'
   const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
   const [isTrackedPhotoOpen, setIsTrackedPhotoOpen] = useState(false);
-  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
 
   // Profile Form State
   const [fullName, setFullName] = useState('');
@@ -388,27 +386,6 @@ export default function RiderProfilePage() {
             >
               <i className="fa-solid fa-camera"></i>
               <span>{profile?.isFaceVerified ? 'Re-verify Camera Photo' : 'Open Camera & Verify Face'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsMobileModalOpen(true)}
-              style={{
-                background: '#FFFFFF',
-                color: '#0F172A',
-                border: '1px solid #CBD5E1',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                fontSize: '0.78rem',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              <i className="fa-solid fa-mobile-screen" style={{ color: '#10B981' }}></i>
-              <span>📱 Mobile Phone URL</span>
             </button>
           </div>
         </div>
@@ -1190,13 +1167,6 @@ export default function RiderProfilePage() {
           photoUrl={profile?.faceVerificationPhoto}
           verifiedAt={profile?.faceVerifiedAt}
           agentName={profile?.fullName}
-        />
-      )}
-
-      {isMobileModalOpen && (
-        <MobileConnectModal
-          isOpen={isMobileModalOpen}
-          onClose={() => setIsMobileModalOpen(false)}
         />
       )}
     </main>
