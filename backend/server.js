@@ -76,6 +76,29 @@ app.get('/api/health', (req, res) => {
     },
     timestamp: new Date().toISOString()
   });
+// Root Welcome & Portal Index Endpoint
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    platform: 'NovaKart Multi-Vendor E-Commerce Platform',
+    role: 'Central Backend API & Socket.IO Real-Time Engine',
+    status: 'ONLINE',
+    version: '1.0.0',
+    documentation: 'https://github.com/bhargavyadav144/novakart',
+    healthCheck: '/api/health',
+    endpoints: {
+      auth: '/api/auth',
+      products: '/api/products',
+      cart: '/api/cart',
+      orders: '/api/orders',
+      sellers: '/api/sellers',
+      delivery: '/api/delivery',
+      admin: '/api/admin',
+      warehouses: '/api/warehouses',
+      payments: '/api/payments',
+      support: '/api/support'
+    }
+  });
 });
 
 // API Routes Mounting

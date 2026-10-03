@@ -74,8 +74,14 @@ export const ensureSupportWorkersSeeded = async () => {
   }
 };
 
-// Auto-seed on module import
-ensureSupportWorkersSeeded();
+// Auto-seed only when MongoDB connection is open
+if (mongoose.connection.readyState === 1) {
+  ensureSupportWorkersSeeded();
+} else {
+  mongoose.connection.once('open', () => {
+    ensureSupportWorkersSeeded();
+  });
+}
 
 // Helper to normalize category
 export const normalizeCategory = (cat) => {
