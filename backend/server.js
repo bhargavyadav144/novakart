@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import { connectDB } from './config/db.js';
+import { connectDB, connectionAttemptsLog } from './config/db.js';
 import { seedDatabase } from './utils/seedDatabase.js';
 import { setSocketIO } from './services/socketService.js';
 import { configureSockets } from './sockets/socketHandler.js';
@@ -89,10 +89,11 @@ app.get('/api/health/connect-db', async (req, res) => {
       isConnected: dbState === 1,
       host: mongoose.connection.host || 'None',
       database: mongoose.connection.name || 'None',
-      message: isConnected ? 'Successfully connected to MongoDB Atlas!' : 'Connection attempt finished without active connection.'
+      message: isConnected ? 'Successfully connected to MongoDB Atlas!' : 'Connection attempt finished without active connection.',
+      attempts: connectionAttemptsLog
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message, attempts: connectionAttemptsLog });
   }
 });
 

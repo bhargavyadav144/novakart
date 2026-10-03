@@ -13,6 +13,8 @@ const CLOUD_ATLAS_SRV_URI = 'mongodb+srv://241fa07004_db_user:5LQDEc8yuZRbqoLd@c
 
 let isRetrying = false;
 
+export const connectionAttemptsLog = [];
+
 export const connectDB = async () => {
   // If already connected, do nothing
   if (mongoose.connection.readyState === 1) {
@@ -62,10 +64,12 @@ export const connectDB = async () => {
       console.log(`🔗 Endpoint: ${safeDisplayUri}`);
       console.log(`===========================================================`);
 
+      connectionAttemptsLog.push({ uri: safeDisplayUri, success: true, host: conn.connection.host, time: new Date().toISOString() });
       isConnected = true;
       break;
     } catch (error) {
       console.warn(`⚠️ [MongoDB Connection Attempt]: Failed connecting to ${safeDisplayUri}: ${error.message}`);
+      connectionAttemptsLog.push({ uri: safeDisplayUri, success: false, error: error.message, time: new Date().toISOString() });
     }
   }
 
