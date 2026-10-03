@@ -76,6 +76,8 @@ app.get('/api/health', (req, res) => {
     },
     timestamp: new Date().toISOString()
   });
+});
+
 // Root Welcome & Portal Index Endpoint
 app.get('/', (req, res) => {
   res.json({
