@@ -78,6 +78,24 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Force Reconnect Endpoint (useful for instant database recovery)
+app.get('/api/health/connect-db', async (req, res) => {
+  try {
+    const isConnected = await connectDB();
+    const dbState = mongoose.connection.readyState;
+    res.json({
+      success: isConnected,
+      readyState: dbState,
+      isConnected: dbState === 1,
+      host: mongoose.connection.host || 'None',
+      database: mongoose.connection.name || 'None',
+      message: isConnected ? 'Successfully connected to MongoDB Atlas!' : 'Connection attempt finished without active connection.'
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Root Welcome & Portal Index Endpoint
 app.get('/', (req, res) => {
   res.json({
