@@ -9,6 +9,8 @@ import {
   getDeliveryProfile,
   updateDeliveryProfile,
   verifyFacePhoto,
+  authorizeFaceChange,
+  verifyFaceMatch,
   sendPasswordOtp,
   changeDeliveryPassword,
   updateAgentRouteByWarehouseManager,
@@ -39,6 +41,8 @@ router.get('/history', getDeliveryHistory);
 router.get('/profile', getDeliveryProfile);
 router.put('/profile', updateDeliveryProfile);
 router.post('/verify-face', verifyFacePhoto);
+router.post('/authorize-face-change', authorizeFaceChange);
+router.post('/verify-face-match', verifyFaceMatch);
 router.post('/send-password-otp', sendPasswordOtp);
 router.put('/change-password', changeDeliveryPassword);
 router.post('/request-bank-update', requestBankUpdate);

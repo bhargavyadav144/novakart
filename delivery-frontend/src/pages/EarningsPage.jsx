@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import deliveryApi, { formatINR } from '../services/deliveryApi';
+import FaceVerificationModal from '../components/FaceVerificationModal';
+import { useDeliveryAuth } from '../context/DeliveryAuthContext';
 
 export default function EarningsPage() {
+  const { agentUser } = useDeliveryAuth() || {};
   const [walletData, setWalletData] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
@@ -37,6 +40,54 @@ export default function EarningsPage() {
   const [customAmount, setCustomAmount] = useState('');
   const [cashoutError, setCashoutError] = useState('');
   const [submittingCashout, setSubmittingCashout] = useState(false);
+
+  // Biometric Face Verification Gate States
+  const [faceModalOpen, setFaceModalOpen] = useState(false);
+  const [faceModalContext, setFaceModalContext] = useState('BANK_UPDATE'); // 'BANK_UPDATE' | 'CASHOUT_WITHDRAWAL'
+  const [targetCashoutPayload, setTargetCashoutPayload] = useState(null);
+  const [pendingBankPayload, setPendingBankPayload] = useState(null);
+
+  // Callback when live face matches enrolled KYC photo
+  const handleFaceVerifiedSuccess = async ({ biometricToken }) => {
+    setFaceModalOpen(false);
+
+    if (faceModalContext === 'CASHOUT_WITHDRAWAL' && targetCashoutPayload) {
+      setSubmittingCashout(true);
+      try {
+        const { data } = await deliveryApi.post('/delivery/request-cashout', {
+          ...targetCashoutPayload,
+          biometricToken
+        });
+        setRequestMsg({ type: 'success', text: `🎉 Biometric Face Confirmed! ${data.message}` });
+        setShowCashoutModal(false);
+        setTargetCashoutPayload(null);
+        fetchRiderWallet();
+      } catch (err) {
+        const msg = err.response?.data?.message || 'Failed to request cashout.';
+        setCashoutError(msg);
+        setRequestMsg({ type: 'error', text: msg });
+      } finally {
+        setSubmittingCashout(false);
+      }
+    } else if (faceModalContext === 'BANK_UPDATE' && pendingBankPayload) {
+      setSubmittingBank(true);
+      try {
+        const { data } = await deliveryApi.post('/delivery/request-bank-update', {
+          ...pendingBankPayload,
+          biometricToken
+        });
+        setRequestMsg({ type: 'success', text: `🎉 Biometric Face Confirmed! ${data.message}` });
+        setShowBankModal(false);
+        setBankOtp('');
+        setPendingBankPayload(null);
+        fetchRiderWallet();
+      } catch (err) {
+        alert(err.response?.data?.message || 'Failed to submit bank update request.');
+      } finally {
+        setSubmittingBank(false);
+      }
+    }
+  };
 
   const fetchRiderWallet = async () => {
     setLoading(true);
@@ -127,7 +178,7 @@ export default function EarningsPage() {
     setShowCashoutModal(true);
   };
 
-  // Submit Cashout (Enforces 1 withdrawal per day, > 100 min threshold, and balance check)
+  // Submit Cashout (Enforces Biometric Face Verification before initiating payout)
   const handleRequestCashout = async (e) => {
     if (e) e.preventDefault();
     setRequestMsg({ type: '', text: '' });
@@ -157,20 +208,10 @@ export default function EarningsPage() {
       return;
     }
 
-    setSubmittingCashout(true);
-    try {
-      const payload = cashoutMode === 'ALL' ? { withdrawAll: true } : { withdrawAmount: targetAmount };
-      const { data } = await deliveryApi.post('/delivery/request-cashout', payload);
-      setRequestMsg({ type: 'success', text: data.message });
-      setShowCashoutModal(false);
-      fetchRiderWallet();
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to request cashout.';
-      setCashoutError(msg);
-      setRequestMsg({ type: 'error', text: msg });
-    } finally {
-      setSubmittingCashout(false);
-    }
+    const payload = cashoutMode === 'ALL' ? { withdrawAll: true } : { withdrawAmount: targetAmount };
+    setTargetCashoutPayload(payload);
+    setFaceModalContext('CASHOUT_WITHDRAWAL');
+    setFaceModalOpen(true);
   };
 
   // Bank OTP State
@@ -191,7 +232,7 @@ export default function EarningsPage() {
     }
   };
 
-  // Submit Bank Edit Request for Admin Approval (Requires Email OTP)
+  // Submit Bank Edit Request for Admin Approval (Requires Email OTP & Biometric Face Verification)
   const handleBankSubmit = async (e) => {
     e.preventDefault();
     setBankOtpMsg({ type: '', text: '' });
@@ -201,25 +242,16 @@ export default function EarningsPage() {
       return;
     }
 
-    setSubmittingBank(true);
-    try {
-      const { data } = await deliveryApi.post('/delivery/request-bank-update', {
-        accountName,
-        accountNumber,
-        bankName,
-        ifscCode,
-        upiId,
-        otp: bankOtp
-      });
-      setRequestMsg({ type: 'success', text: data.message });
-      setShowBankModal(false);
-      setBankOtp('');
-      fetchRiderWallet();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to submit bank update request.');
-    } finally {
-      setSubmittingBank(false);
-    }
+    setPendingBankPayload({
+      accountName,
+      accountNumber,
+      bankName,
+      ifscCode,
+      upiId,
+      otp: bankOtp
+    });
+    setFaceModalContext('BANK_UPDATE');
+    setFaceModalOpen(true);
   };
 
   // Submit Support Ticket for Disputed Money / Payment Issue
@@ -987,6 +1019,20 @@ export default function EarningsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Biometric Face Verification Modal for Bank Details Change & Earnings Cashout */}
+      {faceModalOpen && (
+        <FaceVerificationModal
+          isOpen={faceModalOpen}
+          onClose={() => setFaceModalOpen(false)}
+          onVerifiedSuccess={handleFaceVerifiedSuccess}
+          mode="VERIFY"
+          actionContext={faceModalContext}
+          actionLabel={faceModalContext === 'BANK_UPDATE' ? 'Bank Account Details Change' : 'Earnings Cashout Payout'}
+          amount={targetCashoutPayload?.withdrawAmount || (cashoutMode === 'ALL' ? walletData?.availableBalance : Number(customAmount))}
+          enrolledPhotoUrl={agentUser?.faceVerificationPhoto}
+        />
       )}
     </main>
   );

@@ -1178,6 +1178,8 @@ export default function RiderProfilePage() {
           isOpen={isFaceModalOpen}
           onClose={() => setIsFaceModalOpen(false)}
           onVerifiedSuccess={() => fetchProfile()}
+          mode={profile?.isFaceVerified ? 'RECAPTURE' : 'ENROLL'}
+          enrolledPhotoUrl={profile?.faceVerificationPhoto}
         />
       )}
 

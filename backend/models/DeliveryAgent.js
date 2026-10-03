@@ -15,6 +15,13 @@ const deliveryAgentSchema = new mongoose.Schema({
   faceVerificationPhoto: { type: String, default: '' },
   additionalFacePhotos: [{ type: String }],
   faceVerifiedAt: { type: Date, default: null },
+  faceChangeAuthorizedUntil: { type: Date, default: null },
+  lastFaceBiometricVerification: {
+    verifiedAt: { type: Date, default: null },
+    action: { type: String, default: '' },
+    confidence: { type: Number, default: 0 },
+    token: { type: String, default: '' }
+  },
   bankDetails: {
     accountName: { type: String, default: '' },
     accountNumber: { type: String, default: '309204918204' },
