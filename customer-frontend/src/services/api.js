@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-const envApiUrl = import.meta.env?.VITE_API_BASE_URL;
+const envApiUrl = import.meta.env?.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? 'https://novakart.onrender.com' : null);
 const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
 
-let apiHost = envApiUrl || `http://${hostname}:5050`;
+let apiHost = envApiUrl || (hostname !== 'localhost' && !hostname.startsWith('192.') && !hostname.startsWith('172.') ? 'https://novakart.onrender.com' : `http://${hostname}:5050`);
 if (!envApiUrl && hostname.includes('loca.lt')) {
   apiHost = 'https://cruel-llamas-build.loca.lt';
 }

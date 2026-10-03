@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const envApiUrl = import.meta.env?.VITE_API_BASE_URL;
+const envApiUrl = import.meta.env?.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? 'https://novakart.onrender.com' : null);
 export const API_BASE_URL = envApiUrl ? `${envApiUrl}/api` : 'http://localhost:5050/api';
 export const SOCKET_BASE_URL = envApiUrl || 'http://localhost:5050';
 

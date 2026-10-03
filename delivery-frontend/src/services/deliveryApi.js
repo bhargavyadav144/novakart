@@ -3,13 +3,13 @@ import axios from 'axios';
 const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
 
-const envApiUrl = import.meta.env?.VITE_API_BASE_URL;
-let apiHost = envApiUrl || (isHttps ? window.location.origin : `http://${hostname}:5050`);
+const envApiUrl = import.meta.env?.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? 'https://novakart.onrender.com' : null);
+let apiHost = envApiUrl || (hostname !== 'localhost' && !hostname.startsWith('192.') && !hostname.startsWith('172.') ? 'https://novakart.onrender.com' : `http://${hostname}:5050`);
 if (!envApiUrl && hostname.includes('loca.lt')) {
   apiHost = 'https://cruel-llamas-build.loca.lt';
 }
 
-export const API_BASE_URL = envApiUrl ? `${envApiUrl}/api` : (isHttps ? '/api' : `${apiHost}/api`);
+export const API_BASE_URL = `${apiHost}/api`;
 export const SOCKET_BASE_URL = apiHost;
 
 
