@@ -49,7 +49,7 @@ async function pushToGitHub() {
           name: 'bhargavyadav144',
           email: 'bhargavyadav144@users.noreply.github.com'
         },
-        message: 'feat(seller): add fingerprint and face biometric verification for payment requests, settlement disbursals and security settings'
+        message: 'feat(seller): mandatory registration biometrics (up to 3 fingerprints and 2 faces), existing seller reminder notifications, and biometric enrollment modal'
       });
       console.log('🎉 New commit created:', sha);
     } catch {

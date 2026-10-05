@@ -6,11 +6,12 @@ import { SOCKET_BASE_URL } from '../services/sellerApi';
 import { useSellerAuth } from '../context/SellerAuthContext';
 
 const TYPE_ICONS = {
-  ORDER_STATUS:      { icon: 'fa-receipt', color: '#3B82F6' },
-  DELIVERY_DISPATCH: { icon: 'fa-motorcycle', color: '#10B981' },
-  SELLER_APPROVAL:   { icon: 'fa-check-circle', color: '#8B5CF6' },
-  PAYMENT:           { icon: 'fa-indian-rupee-sign', color: '#10B981' },
-  PROMO:             { icon: 'fa-tag', color: '#EC4899' },
+  ORDER_STATUS:       { icon: 'fa-receipt', color: '#3B82F6' },
+  DELIVERY_DISPATCH:  { icon: 'fa-motorcycle', color: '#10B981' },
+  SELLER_APPROVAL:    { icon: 'fa-check-circle', color: '#8B5CF6' },
+  PAYMENT:            { icon: 'fa-indian-rupee-sign', color: '#10B981' },
+  PROMO:              { icon: 'fa-tag', color: '#EC4899' },
+  BIOMETRIC_SECURITY: { icon: 'fa-fingerprint', color: '#EF4444' },
 };
 
 export default function SellerNotificationBell() {
@@ -75,8 +76,10 @@ export default function SellerNotificationBell() {
   const handleClick = async (notif) => {
     if (!notif.isRead) await handleMarkRead(notif._id);
     setOpen(false);
-    if (notif.orderId || notif.link) {
-      navigate('/orders');
+    if (notif.type === 'BIOMETRIC_SECURITY' || notif.link === '/profile') {
+      navigate('/profile');
+    } else if (notif.orderId || notif.link) {
+      navigate(notif.link || '/orders');
     } else {
       navigate('/orders');
     }

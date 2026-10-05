@@ -38,6 +38,26 @@ const sellerSchema = new mongoose.Schema({
   isFaceVerified: { type: Boolean, default: false },
   faceVerificationPhoto: { type: String, default: '' },
   faceVerifiedAt: { type: Date, default: null },
+  // Multi-biometric security enrollment: up to 3 fingerprints and 2 face scans
+  enrolledFingerprints: [
+    {
+      id: { type: String, required: true },
+      name: { type: String, default: 'Fingerprint 1' },
+      fingerType: { type: String, default: 'Thumb' },
+      enrolledAt: { type: Date, default: Date.now },
+      credentialId: { type: String, default: '' }
+    }
+  ],
+  enrolledFaces: [
+    {
+      id: { type: String, required: true },
+      label: { type: String, default: 'Primary Face Scan (Frontal)' },
+      photo: { type: String, required: true },
+      enrolledAt: { type: Date, default: Date.now }
+    }
+  ],
+  isBiometricEnrolled: { type: Boolean, default: false },
+  biometricsEnrolledAt: { type: Date, default: null },
   lastWithdrawalDate: { type: Date, default: null },
   lastBiometricVerification: {
     verifiedAt: { type: Date, default: null },

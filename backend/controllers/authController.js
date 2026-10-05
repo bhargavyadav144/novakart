@@ -296,10 +296,38 @@ export const registerCustomer = async (req, res, next) => {
 // @access  Public
 export const registerSeller = async (req, res, next) => {
   try {
-    const { storeName, ownerName, email, password, phone, businessAddress, lat, lng, businessLicenseImage, acceptedTerms } = req.body;
+    const {
+      storeName,
+      ownerName,
+      email,
+      password,
+      phone,
+      businessAddress,
+      lat,
+      lng,
+      businessLicenseImage,
+      acceptedTerms,
+      enrolledFingerprints,
+      enrolledFaces
+    } = req.body;
 
     if (!acceptedTerms) {
       return res.status(400).json({ success: false, message: 'You must accept the terms and conditions.' });
+    }
+
+    // Mandatory Biometric Security Validation (2 Faces & up to 3 Fingerprints)
+    if (!Array.isArray(enrolledFaces) || enrolledFaces.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: '🔒 Mandatory Biometric Requirement: You must register exactly 2 face scans (Face 1 Frontal & Face 2 Angle) to onboard as a seller.'
+      });
+    }
+
+    if (!Array.isArray(enrolledFingerprints) || enrolledFingerprints.length < 1) {
+      return res.status(400).json({
+        success: false,
+        message: '🔒 Mandatory Biometric Requirement: You must register your fingerprints (up to 3 fingerprints) to onboard as a seller.'
+      });
     }
 
     let user = await User.findOne({ email });
@@ -319,7 +347,22 @@ export const registerSeller = async (req, res, next) => {
       });
     }
 
-    // 2. Create Seller Profile in pending_approval state
+    // 2. Create Seller Profile in pending_approval state with registered biometrics
+    const sanitizedFaces = enrolledFaces.slice(0, 2).map((f, i) => ({
+      id: f.id || `face-${i + 1}`,
+      label: f.label || (i === 0 ? 'Primary Frontal Face' : 'Secondary Angle Verification Face'),
+      photo: f.photo,
+      enrolledAt: new Date()
+    }));
+
+    const sanitizedFingerprints = enrolledFingerprints.slice(0, 3).map((fp, i) => ({
+      id: fp.id || `fp-${i + 1}`,
+      name: fp.name || `Fingerprint ${i + 1}`,
+      fingerType: fp.fingerType || (i === 0 ? 'Right Thumb' : i === 1 ? 'Right Index' : 'Left Thumb'),
+      enrolledAt: new Date(),
+      credentialId: fp.credentialId || ''
+    }));
+
     const seller = await Seller.create({
       userId: user._id,
       storeName,
@@ -329,6 +372,13 @@ export const registerSeller = async (req, res, next) => {
       businessAddress,
       businessLicenseImage,
       acceptedTerms,
+      enrolledFaces: sanitizedFaces,
+      enrolledFingerprints: sanitizedFingerprints,
+      faceVerificationPhoto: sanitizedFaces[0]?.photo || '',
+      isFaceVerified: true,
+      faceVerifiedAt: new Date(),
+      isBiometricEnrolled: true,
+      biometricsEnrolledAt: new Date(),
       location: {
         lat: parseFloat(lat) || 28.6139,
         lng: parseFloat(lng) || 77.2090,
@@ -344,7 +394,7 @@ export const registerSeller = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Seller registration submitted. Awaiting administrator KYC approval.',
+      message: 'Seller registration submitted with biometric verification. Awaiting administrator KYC approval.',
       token,
       user: {
         id: user._id,
@@ -354,7 +404,10 @@ export const registerSeller = async (req, res, next) => {
         sellerId: seller._id,
         storeName: seller.storeName,
         status: seller.status,
-        isApproved: seller.isApproved
+        isApproved: seller.isApproved,
+        isBiometricEnrolled: true,
+        enrolledFacesCount: sanitizedFaces.length,
+        enrolledFingerprintsCount: sanitizedFingerprints.length
       }
     });
   } catch (error) {
@@ -474,12 +527,17 @@ export const loginUser = async (req, res, next) => {
             message: "Unauthorized portal access: You do not have a Seller business profile registered. Please register as a Seller first."
           });
         }
+        const hasCompleteBiometrics = Boolean(sellerProfile.isBiometricEnrolled && (sellerProfile.enrolledFaces?.length || 0) >= 2 && (sellerProfile.enrolledFingerprints?.length || 0) >= 1);
         extraMeta = {
           sellerId: sellerProfile._id,
           storeName: sellerProfile.storeName,
           status: sellerProfile.status,
           isApproved: sellerProfile.isApproved,
-          revenue: sellerProfile.revenue || 0
+          revenue: sellerProfile.revenue || 0,
+          isBiometricEnrolled: hasCompleteBiometrics,
+          biometricSetupRequired: !hasCompleteBiometrics,
+          enrolledFacesCount: sellerProfile.enrolledFaces?.length || 0,
+          enrolledFingerprintsCount: sellerProfile.enrolledFingerprints?.length || 0
         };
       } else if (expectedRole === ROLES.DELIVERY) {
         const agentProfile = await DeliveryAgent.findOne({ userId: user._id });
@@ -564,7 +622,16 @@ export const getMe = async (req, res, next) => {
 
     if (user.role === ROLES.SELLER) {
       const seller = await Seller.findOne({ userId: user._id });
-      if (seller) extraMeta = { seller };
+      if (seller) {
+        const hasCompleteBiometrics = Boolean(seller.isBiometricEnrolled && (seller.enrolledFaces?.length || 0) >= 2 && (seller.enrolledFingerprints?.length || 0) >= 1);
+        extraMeta = {
+          seller,
+          isBiometricEnrolled: hasCompleteBiometrics,
+          biometricSetupRequired: !hasCompleteBiometrics,
+          enrolledFacesCount: seller.enrolledFaces?.length || 0,
+          enrolledFingerprintsCount: seller.enrolledFingerprints?.length || 0
+        };
+      }
     } else if (user.role === ROLES.DELIVERY) {
       const agent = await DeliveryAgent.findOne({ userId: user._id });
       if (agent) extraMeta = { deliveryAgent: agent };

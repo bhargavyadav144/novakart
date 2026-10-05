@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import sellerApi, { formatINR } from '../services/sellerApi';
 import SellerBiometricModal from '../components/SellerBiometricModal';
+import SellerBiometricEnrollModal from '../components/SellerBiometricEnrollModal';
 
 export default function SellerPayouts() {
   const [walletData, setWalletData] = useState(null);
@@ -21,6 +22,7 @@ export default function SellerPayouts() {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutNotes, setPayoutNotes] = useState('');
   const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [requestingPayout, setRequestingPayout] = useState(false);
   const [payoutSuccessData, setPayoutSuccessData] = useState(null);
 
@@ -115,7 +117,12 @@ export default function SellerPayouts() {
         fetchWallet();
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to submit payout claim. Please try again.');
+      if (err.response?.data?.requireBiometricEnrollment) {
+        setIsBiometricModalOpen(false);
+        setIsEnrollModalOpen(true);
+      } else {
+        alert(err.response?.data?.message || 'Failed to submit payout claim. Please try again.');
+      }
     } finally {
       setRequestingPayout(false);
     }
@@ -626,6 +633,17 @@ export default function SellerPayouts() {
         bankDetails={walletData?.bankDetails}
         actionContext="CASHOUT_WITHDRAWAL"
         actionLabel="Merchant Payout Biometric Authorization"
+      />
+
+      {/* SELLER BIOMETRIC ENROLLMENT MODAL (3 FINGERPRINTS & 2 FACES) */}
+      <SellerBiometricEnrollModal
+        isOpen={isEnrollModalOpen}
+        onClose={() => setIsEnrollModalOpen(false)}
+        isStandalone={true}
+        onSuccess={() => {
+          setIsEnrollModalOpen(false);
+          fetchWallet();
+        }}
       />
     </div>
   );

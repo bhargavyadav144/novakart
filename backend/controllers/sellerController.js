@@ -52,9 +52,18 @@ export const getSellerProfile = async (req, res, next) => {
     const seller = await Seller.findOne({ userId: req.user._id });
     if (!seller) return res.status(404).json({ success: false, message: 'Seller profile not found.' });
 
+    const enrolledFacesCount = seller.enrolledFaces?.length || 0;
+    const enrolledFingerprintsCount = seller.enrolledFingerprints?.length || 0;
+    const isBiometricEnrolled = Boolean(seller.isBiometricEnrolled && enrolledFacesCount >= 2 && enrolledFingerprintsCount >= 1);
+    const biometricSetupRequired = !isBiometricEnrolled;
+
     res.json({
       success: true,
-      seller
+      seller,
+      isBiometricEnrolled,
+      biometricSetupRequired,
+      enrolledFacesCount,
+      enrolledFingerprintsCount
     });
   } catch (error) {
     next(error);
@@ -228,6 +237,77 @@ export const authorizeSellerFaceChange = async (req, res, next) => {
   }
 };
 
+// @desc    Enroll or Update Multi-Biometrics (up to 3 Fingerprints and 2 Face Scans)
+// @route   POST /api/sellers/enroll-biometrics
+// @access  Private (Seller)
+export const enrollSellerBiometrics = async (req, res, next) => {
+  try {
+    const { enrolledFingerprints, enrolledFaces, password } = req.body;
+
+    const seller = await Seller.findOne({ userId: req.user._id });
+    if (!seller) return res.status(404).json({ success: false, message: 'Seller profile not found.' });
+
+    // If seller already has completed biometrics and is modifying/replacing, verify password for security
+    if (seller.isBiometricEnrolled && (seller.enrolledFaces?.length >= 2 || seller.enrolledFingerprints?.length >= 1)) {
+      if (password) {
+        const user = await User.findById(req.user._id);
+        const isMatch = await user.matchPassword(password);
+        if (!isMatch) {
+          return res.status(401).json({ success: false, message: '❌ Incorrect account password. Biometric update denied.' });
+        }
+      }
+    }
+
+    if (!Array.isArray(enrolledFaces) || enrolledFaces.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: '🔒 Mandatory Biometric Requirement: You must register exactly 2 face scans (Face 1 Frontal & Face 2 Angle).'
+      });
+    }
+
+    if (!Array.isArray(enrolledFingerprints) || enrolledFingerprints.length < 1) {
+      return res.status(400).json({
+        success: false,
+        message: '🔒 Mandatory Biometric Requirement: You must register your fingerprints (up to 3 fingerprints).'
+      });
+    }
+
+    seller.enrolledFaces = enrolledFaces.slice(0, 2).map((f, i) => ({
+      id: f.id || `face-${i + 1}`,
+      label: f.label || (i === 0 ? 'Primary Frontal Face' : 'Secondary Angle Verification Face'),
+      photo: f.photo,
+      enrolledAt: f.enrolledAt ? new Date(f.enrolledAt) : new Date()
+    }));
+
+    seller.enrolledFingerprints = enrolledFingerprints.slice(0, 3).map((fp, i) => ({
+      id: fp.id || `fp-${i + 1}`,
+      name: fp.name || `Fingerprint ${i + 1}`,
+      fingerType: fp.fingerType || (i === 0 ? 'Right Thumb' : i === 1 ? 'Right Index' : 'Left Thumb'),
+      enrolledAt: fp.enrolledAt ? new Date(fp.enrolledAt) : new Date(),
+      credentialId: fp.credentialId || ''
+    }));
+
+    seller.faceVerificationPhoto = seller.enrolledFaces[0]?.photo || seller.faceVerificationPhoto;
+    seller.isFaceVerified = true;
+    seller.faceVerifiedAt = new Date();
+    seller.isBiometricEnrolled = true;
+    seller.biometricsEnrolledAt = new Date();
+
+    await seller.save();
+
+    res.json({
+      success: true,
+      message: '✅ Biometric Security Setup Completed! 2 Face scans and registered fingerprints saved successfully.',
+      isBiometricEnrolled: true,
+      enrolledFaces: seller.enrolledFaces,
+      enrolledFingerprints: seller.enrolledFingerprints,
+      seller
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Enroll or Update Seller KYC Face Photo
 // @route   POST /api/sellers/enroll-face
 // @access  Private (Seller)
@@ -265,6 +345,15 @@ export const requestSellerPayout = async (req, res, next) => {
 
     const seller = await Seller.findOne({ userId: req.user._id });
     if (!seller) return res.status(404).json({ success: false, message: 'Seller profile not found.' });
+
+    // 0. Ensure Biometric Profile is Enrolled (2 Faces & up to 3 Fingerprints)
+    if (!seller.isBiometricEnrolled || (seller.enrolledFaces?.length || 0) < 2 || (seller.enrolledFingerprints?.length || 0) < 1) {
+      return res.status(403).json({
+        success: false,
+        requireBiometricEnrollment: true,
+        message: '🔒 Mandatory Biometric Setup Required: You must register 2 face scans and up to 3 fingerprints before requesting payouts.'
+      });
+    }
 
     // 1. Mandatory Biometric Security Gate (Fingerprint or Face)
     let isBiometricVerified = false;

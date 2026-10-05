@@ -1,4 +1,5 @@
 import { Notification } from '../models/Notification.js';
+import { Seller } from '../models/Seller.js';
 import { emitToUser } from '../services/socketService.js';
 
 // Helper: Create a notification and emit it in real-time
@@ -44,10 +45,33 @@ export const createNotification = async ({ recipientId, role, title, message, ty
 // @access Private
 export const getMyNotifications = async (req, res, next) => {
   try {
-    const notifications = await Notification.find({ recipientId: req.user._id })
+    let notifications = await Notification.find({ recipientId: req.user._id })
       .sort({ createdAt: -1 })
       .limit(50);
-    const unreadCount = await Notification.countDocuments({ recipientId: req.user._id, isRead: false });
+    let unreadCount = await Notification.countDocuments({ recipientId: req.user._id, isRead: false });
+
+    // For sellers: check if biometric registration (3 fingerprints & 2 faces) is complete
+    if (req.user.role === 'seller') {
+      const seller = await Seller.findOne({ userId: req.user._id });
+      if (seller) {
+        const hasCompleteBiometrics = Boolean(seller.isBiometricEnrolled && (seller.enrolledFaces?.length || 0) >= 2 && (seller.enrolledFingerprints?.length || 0) >= 1);
+        if (!hasCompleteBiometrics) {
+          const biometricNotif = {
+            _id: `biometric-mandatory-${seller._id}`,
+            recipientId: req.user._id,
+            title: '🚨 Mandatory Biometrics Incomplete (Action Required)',
+            message: 'NovaKart Security Compliance: You must register up to 3 fingerprints and 2 face scans to enable payout withdrawals and protect your store ledger.',
+            type: 'BIOMETRIC_SECURITY',
+            link: '/profile',
+            isRead: false,
+            createdAt: new Date()
+          };
+          notifications = [biometricNotif, ...notifications];
+          unreadCount += 1;
+        }
+      }
+    }
+
     res.json({ success: true, notifications, unreadCount });
   } catch (error) {
     next(error);

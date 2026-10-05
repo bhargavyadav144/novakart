@@ -6,6 +6,7 @@ import {
   verifySellerBiometric,
   authorizeSellerFaceChange,
   enrollSellerFace,
+  enrollSellerBiometrics,
   requestSellerPayout
 } from '../controllers/sellerController.js';
 import { authenticateUser } from '../middleware/authMiddleware.js';
@@ -24,6 +25,7 @@ router.put('/profile', updateSellerProfile);
 router.post('/verify-biometric', verifySellerBiometric);
 router.post('/authorize-face-change', authorizeSellerFaceChange);
 router.post('/enroll-face', enrollSellerFace);
+router.post('/enroll-biometrics', enrollSellerBiometrics);
 router.post('/request-payout', requestSellerPayout);
 
 export default router;

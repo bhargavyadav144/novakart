@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSellerAuth } from '../context/SellerAuthContext';
 import sellerApi from '../services/sellerApi';
 import SellerBiometricModal from '../components/SellerBiometricModal';
+import SellerBiometricEnrollModal from '../components/SellerBiometricEnrollModal';
 
 const DEFAULT_OWNER_PHOTO = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
 const DEFAULT_STORE_BANNER = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80';
@@ -18,9 +19,13 @@ const LOCATION_PRESETS = [
 export default function SellerProfile() {
   const { sellerUser, updateSellerUser } = useSellerAuth();
   
-  // Biometric Test States
+  // Biometric Test & Enrollment States
   const [isBioTestModalOpen, setIsBioTestModalOpen] = useState(false);
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [bioModalMode, setBioModalMode] = useState('VERIFY');
+  const [enrolledFaces, setEnrolledFaces] = useState([]);
+  const [enrolledFingerprints, setEnrolledFingerprints] = useState([]);
+  const [isBiometricEnrolled, setIsBiometricEnrolled] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
@@ -564,21 +569,56 @@ export default function SellerProfile() {
           </div>
         </div>
 
-        {/* 5. Merchant Biometric Security & KYC Identity (Fingerprint & Face) */}
+        {/* 5. Merchant Biometric Security & KYC Identity (3 Fingerprints & 2 Faces) */}
         <div style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0F172A', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <i className="fa-solid fa-fingerprint" style={{ color: '#10B981' }}></i>
                 Merchant Biometric Security &amp; Payout Protection
               </h3>
               <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>
-                High-security biometric gate protecting bank payout disbursals and account changes
+                Mandatory multi-biometric setup: <strong>2 face scans</strong> and <strong>up to 3 fingerprints</strong> required for payout disbursals
               </p>
             </div>
-            <span style={{ background: '#ECFDF5', color: '#047857', padding: '4px 12px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <i className="fa-solid fa-circle-check"></i> Biometric Active
-            </span>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                background: isBiometricEnrolled ? '#ECFDF5' : '#FEF2F2',
+                color: isBiometricEnrolled ? '#047857' : '#DC2626',
+                padding: '4px 12px',
+                borderRadius: '12px',
+                fontSize: '0.78rem',
+                fontWeight: '800',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <i className={`fa-solid ${isBiometricEnrolled ? 'fa-circle-check' : 'fa-triangle-exclamation'}`}></i>
+                {isBiometricEnrolled ? 'Biometrics Fully Configured' : 'Setup Required'}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setIsEnrollModalOpen(true)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <i className="fa-solid fa-shield-halved"></i>
+                {isBiometricEnrolled ? 'Manage Biometrics' : 'Enroll 3 Fingerprints & 2 Faces'}
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginTop: '12px' }}>
@@ -590,33 +630,51 @@ export default function SellerProfile() {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
-                    👆 Touch Fingerprint Sensor
+                    👆 Registered Fingerprints ({enrolledFingerprints.length}/3)
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#047857', fontWeight: '700' }}>
-                    Hardware Sensor Enabled
+                    {enrolledFingerprints.length > 0 ? `${enrolledFingerprints.length} Hardware Sensor Slots Active` : 'No Fingerprints Registered'}
                   </div>
                 </div>
               </div>
               <p style={{ fontSize: '0.76rem', color: '#64748B', margin: '0 0 12px 0', lineHeight: '1.4' }}>
-                Authenticate instant payout claims with your smartphone touch sensor or laptop fingerprint scanner.
+                Authenticate instant payout claims with registered thumbs or index fingers on device scanner.
               </p>
-              <button
-                type="button"
-                onClick={() => { setBioModalMode('VERIFY'); setIsBioTestModalOpen(true); }}
-                style={{
-                  width: '100%',
-                  background: '#FFFFFF',
-                  border: '1px solid #A7F3D0',
-                  color: '#047857',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: '800',
-                  cursor: 'pointer'
-                }}
-              >
-                <i className="fa-solid fa-fingerprint"></i> Test Fingerprint Sensor
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setBioModalMode('VERIFY'); setIsBioTestModalOpen(true); }}
+                  style={{
+                    flex: 1,
+                    background: '#FFFFFF',
+                    border: '1px solid #A7F3D0',
+                    color: '#047857',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <i className="fa-solid fa-fingerprint"></i> Test Sensor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEnrollModalOpen(true)}
+                  style={{
+                    padding: '8px 12px',
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    color: '#334155',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Edit Slots
+                </button>
+              </div>
             </div>
 
             {/* Method 2: Live Face Recognition */}
@@ -627,33 +685,51 @@ export default function SellerProfile() {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
-                    📷 Live Face Recognition
+                    📷 Enrolled Face Scans ({enrolledFaces.length}/2)
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#1D4ED8', fontWeight: '700' }}>
-                    KYC Enrolled &amp; Matched
+                    {enrolledFaces.length >= 2 ? 'Frontal & Angle Faces Active' : 'Pending Dual Face Registration'}
                   </div>
                 </div>
               </div>
               <p style={{ fontSize: '0.76rem', color: '#64748B', margin: '0 0 12px 0', lineHeight: '1.4' }}>
-                Real-time webcam vector comparison matched against your store owner profile photo.
+                Webcam vector matching checked against both Face 1 (Frontal) and Face 2 (Angle).
               </p>
-              <button
-                type="button"
-                onClick={() => { setBioModalMode('RECAPTURE'); setIsBioTestModalOpen(true); }}
-                style={{
-                  width: '100%',
-                  background: '#FFFFFF',
-                  border: '1px solid #BFDBFE',
-                  color: '#1D4ED8',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: '800',
-                  cursor: 'pointer'
-                }}
-              >
-                <i className="fa-solid fa-camera"></i> Re-capture Live Face KYC
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setBioModalMode('RECAPTURE'); setIsBioTestModalOpen(true); }}
+                  style={{
+                    flex: 1,
+                    background: '#FFFFFF',
+                    border: '1px solid #BFDBFE',
+                    color: '#1D4ED8',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <i className="fa-solid fa-camera"></i> Re-capture Face
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEnrollModalOpen(true)}
+                  style={{
+                    padding: '8px 12px',
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    color: '#334155',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Manage 2 Faces
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -705,6 +781,27 @@ export default function SellerProfile() {
         actionContext="SECURITY_VERIFICATION"
         actionLabel={bioModalMode === 'RECAPTURE' ? 'Store Owner Face Re-Capture' : 'Biometric Sensor Test'}
         enrolledPhotoUrl={logo}
+      />
+
+      {/* SELLER BIOMETRIC ENROLLMENT MODAL (3 FINGERPRINTS & 2 FACES) */}
+      <SellerBiometricEnrollModal
+        isOpen={isEnrollModalOpen}
+        onClose={() => setIsEnrollModalOpen(false)}
+        isStandalone={true}
+        initialFaces={enrolledFaces}
+        initialFingerprints={enrolledFingerprints}
+        onSuccess={() => {
+          setIsEnrollModalOpen(false);
+          setSuccessMsg('✅ Multi-biometric security settings successfully saved!');
+          setTimeout(() => setSuccessMsg(''), 4000);
+          sellerApi.get('/sellers/profile').then(({ data }) => {
+            const s = data.seller || {};
+            setEnrolledFaces(s.enrolledFaces || []);
+            setEnrolledFingerprints(s.enrolledFingerprints || []);
+            setIsBiometricEnrolled(Boolean(data.isBiometricEnrolled || s.isBiometricEnrolled));
+            if (updateSellerUser) updateSellerUser(data);
+          });
+        }}
       />
     </div>
   );

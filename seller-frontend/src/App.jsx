@@ -12,6 +12,7 @@ import SellerOrders from './pages/SellerOrders';
 import SellerProfile from './pages/SellerProfile';
 import SellerPayouts from './pages/SellerPayouts';
 import SellerLogin from './pages/SellerLogin';
+import SellerBiometricReminderBanner from './components/SellerBiometricReminderBanner';
 import SellerRegister from './pages/SellerRegister';
 
 import './styles/seller.css';
@@ -41,8 +42,11 @@ function ProtectedSellerLayout({ children }) {
   return (
     <div className="seller-layout">
       <SellerSidebar />
-      <main className="seller-content">
-        {children}
+      <main className="seller-content" style={{ display: 'flex', flexDirection: 'column' }}>
+        <SellerBiometricReminderBanner />
+        <div style={{ flex: 1 }}>
+          {children}
+        </div>
       </main>
     </div>
   );
