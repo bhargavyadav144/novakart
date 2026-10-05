@@ -323,7 +323,9 @@ export const authorizeSellerFaceChange = async (req, res, next) => {
 // @access  Private (Seller)
 export const enrollSellerBiometrics = async (req, res, next) => {
   try {
-    const { enrolledFingerprints, enrolledFaces, password } = req.body;
+    const enrolledFingerprints = req.body.enrolledFingerprints || req.body.fingerprints;
+    const enrolledFaces = req.body.enrolledFaces || req.body.faces;
+    const password = req.body.password;
 
     const seller = await Seller.findOne({ userId: req.user._id });
     if (!seller) return res.status(404).json({ success: false, message: 'Seller profile not found.' });

@@ -24,11 +24,11 @@ const sellerSchema = new mongoose.Schema({
   acceptedTerms: { type: Boolean, default: false },
   bankDetails: {
     accountHolderName: { type: String, default: '' },
-    bankName: { type: String, default: 'HDFC Bank' },
-    accountNumber: { type: String, default: '50100234891244' },
-    ifscCode: { type: String, default: 'HDFC0001234' },
+    bankName: { type: String, default: '' },
+    accountNumber: { type: String, default: '' },
+    ifscCode: { type: String, default: '' },
     upiId: { type: String, default: '' },
-    isVerified: { type: Boolean, default: true }
+    isVerified: { type: Boolean, default: false }
   },
   wallet: {
     availableBalance: { type: Number, default: 0 },
