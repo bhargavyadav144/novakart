@@ -29,6 +29,7 @@ export default function SellerSidebar() {
         <NavLink to="/orders"><i className="fa-solid fa-receipt"></i> Store Orders</NavLink>
         <NavLink to="/payouts"><i className="fa-solid fa-building-columns"></i> Settlements &amp; Payouts</NavLink>
         <NavLink to="/profile"><i className="fa-solid fa-shop"></i> Store Settings</NavLink>
+        <NavLink to="/terms"><i className="fa-solid fa-file-contract"></i> Terms &amp; Policies</NavLink>
         <a href="http://localhost:3000" target="_blank" rel="noreferrer"><i className="fa-solid fa-arrow-up-right-from-square"></i> Customer Store</a>
       </nav>
 

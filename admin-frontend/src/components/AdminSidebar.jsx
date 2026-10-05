@@ -23,6 +23,7 @@ export default function AdminSidebar() {
         <NavLink to="/warehouses"><i className="fa-solid fa-warehouse"></i> Warehouses &amp; Hubs</NavLink>
         <NavLink to="/returns"><i className="fa-solid fa-rotate-left"></i> Return &amp; Refund Pipeline</NavLink>
         <NavLink to="/help-center"><i className="fa-solid fa-headset"></i> Help Center Support Squad</NavLink>
+        <NavLink to="/terms"><i className="fa-solid fa-file-contract"></i> Terms &amp; Policies Governance</NavLink>
         <a 
           href="http://localhost:3005" 
           target="_blank" 

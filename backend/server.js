@@ -26,6 +26,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import callQueueRoutes from './routes/callQueueRoutes.js';
+import termsRoutes from './routes/termsRoutes.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -138,6 +139,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/returns', returnRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/call-queue', callQueueRoutes);
+app.use('/api/terms', termsRoutes);
 
 // Error Handling Middlewares
 app.use(notFoundHandler);

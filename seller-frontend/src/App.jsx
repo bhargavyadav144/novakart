@@ -14,6 +14,7 @@ import SellerPayouts from './pages/SellerPayouts';
 import SellerLogin from './pages/SellerLogin';
 import SellerRegister from './pages/SellerRegister';
 import SellerVerificationPage from './pages/SellerVerificationPage';
+import TermsPage from './pages/TermsPage';
 import SellerBiometricReminderBanner from './components/SellerBiometricReminderBanner';
 
 import './styles/seller.css';
@@ -125,6 +126,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<SellerLogin />} />
           <Route path="/register" element={<SellerRegister />} />
+          <Route path="/terms" element={<TermsPage />} />
           
           {/* Main Dashboard & Verification */}
           <Route path="/" element={<ProtectedSellerLayout><SellerDashboard /></ProtectedSellerLayout>} />
