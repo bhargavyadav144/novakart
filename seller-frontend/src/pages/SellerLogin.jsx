@@ -4,14 +4,17 @@ import { useSellerAuth } from '../context/SellerAuthContext';
 import sellerApi from '../services/sellerApi';
 
 export default function SellerLogin() {
-  const [loginMode, setLoginMode] = useState('password'); // 'password' | 'otp' | 'forgot'
+  const [loginMode, setLoginMode] = useState('password'); // 'password' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // OTP State
-  const [otpStep, setOtpStep] = useState(1);
-  const [otpCode, setOtpCode] = useState('');
+  // Forgot Password State
+  const [forgotStep, setForgotStep] = useState(1); // 1 = Enter Email, 2 = Enter OTP + New Password
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -23,14 +26,14 @@ export default function SellerLogin() {
 
   useEffect(() => {
     let interval = null;
-    if (loginMode === 'otp' && otpStep === 2 && timer > 0) {
+    if (loginMode === 'forgot' && forgotStep === 2 && timer > 0) {
       interval = setInterval(() => setTimer((p) => p - 1), 1000);
     } else if (timer === 0) {
       setCanResend(true);
       clearInterval(interval);
     }
     return () => clearInterval(interval);
-  }, [loginMode, otpStep, timer]);
+  }, [loginMode, forgotStep, timer]);
 
   // Standard Password Login
   const handlePasswordLogin = async (e) => {
@@ -39,59 +42,85 @@ export default function SellerLogin() {
     setSuccessMsg('');
     const res = await login(email.trim(), password);
     if (res.success) {
-      navigate('/');
+      // Check approval status: if approved go to real portal, else verification hub
+      if (res.user?.isApproved) {
+        navigate('/');
+      } else {
+        navigate('/verification');
+      }
     } else {
       setErrorMsg(res.message);
     }
   };
 
-  // Send OTP with Immediate Account Verification
-  const handleSendOTP = async (e) => {
+  // Step 1: Send Reset OTP to Registered Email
+  const handleSendResetOTP = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
-    setSubmitting(true);
 
+    if (!email.trim()) {
+      setErrorMsg('Please enter your registered store owner email.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const { data } = await sellerApi.post('/auth/send-otp', {
+      await sellerApi.post('/auth/send-otp', {
         email: email.trim(),
-        purpose: 'login',
+        purpose: 'forgot_password',
         expectedRole: 'seller'
       });
 
-      setOtpStep(2);
+      setForgotStep(2);
       setTimer(60);
       setCanResend(false);
-      setSuccessMsg(`A 6-digit verification code was sent to ${email.trim()}`);
+      setSuccessMsg(`A 6-digit security code was dispatched to ${email.trim()}`);
     } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to send verification code. Please verify your email.';
+      const msg = err.response?.data?.message || 'Failed to send security code. Please check your email.';
       setErrorMsg(msg);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Verify OTP Login
-  const handleVerifyOTP = async (e) => {
+  // Step 2: Verify OTP and Set New Password
+  const handleResetPassword = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!resetOtp.trim() || resetOtp.length < 6) {
+      setErrorMsg('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      setErrorMsg('New password must be at least 6 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setErrorMsg('Passwords do not match. Please re-enter your new password.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const { data } = await sellerApi.post('/auth/login-otp', {
-        identifier: email.trim(),
-        otp: otpCode.trim(),
-        expectedRole: 'seller'
+      const { data } = await sellerApi.post('/auth/reset-password', {
+        email: email.trim(),
+        otp: resetOtp.trim(),
+        newPassword
       });
 
-      if (data.token) {
-        localStorage.setItem('seller_token', data.token);
-        if (data.user) localStorage.setItem('seller_user', JSON.stringify(data.user));
-        window.location.href = '/';
-      } else {
-        navigate('/');
-      }
+      setSuccessMsg(data.message || 'Password reset successfully! Please sign in with your new password.');
+      setLoginMode('password');
+      setPassword('');
+      setResetOtp('');
+      setNewPassword('');
+      setConfirmNewPassword('');
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Invalid or expired verification code.');
+      setErrorMsg(err.response?.data?.message || 'Failed to reset password. Please check the code.');
     } finally {
       setSubmitting(false);
     }
@@ -115,10 +144,12 @@ export default function SellerLogin() {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '26px' }}>
           <h1 style={{ fontSize: '1.65rem', fontWeight: '800', color: 'var(--seller-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-            <i className="fa-solid fa-store" style={{ color: 'var(--seller-accent)' }}></i> Merchant Sign In
+            <i className="fa-solid fa-store" style={{ color: 'var(--seller-accent)' }}></i> {loginMode === 'forgot' ? 'Reset Password' : 'Merchant Sign In'}
           </h1>
           <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '4px' }}>
-            Access your store catalog, orders, and settlement ledger
+            {loginMode === 'forgot'
+              ? 'Verify your registered email to create a new password'
+              : 'Access your store catalog, orders, and settlement ledger'}
           </p>
         </div>
 
@@ -155,28 +186,23 @@ export default function SellerLogin() {
             </div>
 
             <div>
-              {/* Contextual links above the password field */}
+              {/* Only Forgot Password? link above the password field */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>
                   Password
                 </label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setLoginMode('otp'); setErrorMsg(''); setSuccessMsg(''); setOtpStep(1); }}
-                    style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '700', padding: 0 }}
-                  >
-                    OTP Login
-                  </button>
-                  <span style={{ color: '#cbd5e1', fontSize: '0.78rem' }}>&bull;</span>
-                  <button
-                    type="button"
-                    onClick={() => { setLoginMode('otp'); setErrorMsg(''); setSuccessMsg(''); setOtpStep(1); }}
-                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMode('forgot');
+                    setForgotStep(1);
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '700', padding: 0 }}
+                >
+                  Forgot Password?
+                </button>
               </div>
 
               <div style={{ position: 'relative' }}>
@@ -209,24 +235,15 @@ export default function SellerLogin() {
           </form>
         )}
 
-        {/* 2. OTP SIGN IN */}
-        {loginMode === 'otp' && (
+        {/* 2. FORGOT PASSWORD FLOW */}
+        {loginMode === 'forgot' && (
           <div>
-            {otpStep === 1 ? (
-              <form onSubmit={handleSendOTP} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {forgotStep === 1 ? (
+              <form onSubmit={handleSendResetOTP} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>
-                      Registered Merchant Email
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => { setLoginMode('password'); setErrorMsg(''); setSuccessMsg(''); }}
-                      style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '700', padding: 0 }}
-                    >
-                      ← Use Password
-                    </button>
-                  </div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                    Registered Merchant Email
+                  </label>
                   <input
                     type="email"
                     style={inputStyle}
@@ -235,8 +252,8 @@ export default function SellerLogin() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                   />
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
-                    We will send a secure 6-digit login verification code to your email
+                  <p style={{ margin: '6px 0 0 0', fontSize: '0.76rem', color: '#64748b' }}>
+                    We will send a 6-digit security code to this email to reset your password.
                   </p>
                 </div>
 
@@ -246,23 +263,70 @@ export default function SellerLogin() {
                   style={{ padding: '12px', justifyContent: 'center', width: '100%', fontSize: '0.9rem', fontWeight: '800' }}
                   disabled={submitting}
                 >
-                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Verifying Account...</> : <><i className="fa-solid fa-paper-plane"></i> Send OTP Code</>}
+                  {submitting ? <><i className="fa-solid fa-spinner fa-spin"></i> Verifying Account...</> : <><i className="fa-solid fa-paper-plane"></i> Send Reset Code</>}
                 </button>
+
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setLoginMode('password'); setErrorMsg(''); setSuccessMsg(''); }}
+                    style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '700' }}
+                  >
+                    ← Back to Merchant Sign In
+                  </button>
+                </div>
               </form>
             ) : (
-              <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '10px' }}>
-                    Enter 6-Digit Verification Code
+              <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                    6-Digit Security Code sent to {email}
                   </label>
                   <input
                     type="text"
                     maxLength="6"
-                    style={{ ...inputStyle, textAlign: 'center', fontSize: '1.8rem', letterSpacing: '12px', fontWeight: '800', padding: '10px' }}
+                    style={{ ...inputStyle, textAlign: 'center', fontSize: '1.6rem', letterSpacing: '8px', fontWeight: '800', padding: '8px' }}
                     placeholder="••••••"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    value={resetOtp}
+                    onChange={(e) => setResetOtp(e.target.value.replace(/[^0-9]/g, ''))}
                     autoFocus
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                    New Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      style={{ ...inputStyle, paddingRight: '42px' }}
+                      placeholder="Minimum 6 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                    >
+                      <i className={`fa-solid ${showNewPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                    Confirm New Password
+                  </label>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    style={inputStyle}
+                    placeholder="Re-enter new password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
                   />
                 </div>
@@ -270,16 +334,16 @@ export default function SellerLogin() {
                 <button
                   type="submit"
                   className="btn-seller btn-seller-primary"
-                  style={{ padding: '12px', justifyContent: 'center', width: '100%', fontSize: '0.9rem', fontWeight: '800' }}
-                  disabled={submitting || otpCode.length < 6}
+                  style={{ padding: '12px', justifyContent: 'center', width: '100%', fontSize: '0.9rem', fontWeight: '800', marginTop: '4px' }}
+                  disabled={submitting || resetOtp.length < 6}
                 >
-                  {submitting ? 'Verifying Code...' : 'Verify & Sign In →'}
+                  {submitting ? 'Updating Password...' : 'Reset Password & Sign In →'}
                 </button>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#64748B' }}>
                   <button
                     type="button"
-                    onClick={() => { setOtpStep(1); setOtpCode(''); }}
+                    onClick={() => { setForgotStep(1); setResetOtp(''); }}
                     style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.8rem' }}
                   >
                     ← Change Email
@@ -287,11 +351,11 @@ export default function SellerLogin() {
 
                   <div>
                     {timer > 0 ? (
-                      <span>Resend in <strong>{timer}s</strong></span>
+                      <span>Resend code in <strong>{timer}s</strong></span>
                     ) : (
                       <button
                         type="button"
-                        onClick={handleSendOTP}
+                        onClick={handleSendResetOTP}
                         style={{ background: 'none', border: 'none', color: '#0f766e', cursor: 'pointer', fontWeight: '700', fontSize: '0.8rem' }}
                       >
                         Resend Code
@@ -306,7 +370,7 @@ export default function SellerLogin() {
                     onClick={() => { setLoginMode('password'); setErrorMsg(''); setSuccessMsg(''); }}
                     style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '700' }}
                   >
-                    ← Sign In with Password instead
+                    ← Back to Merchant Sign In
                   </button>
                 </div>
               </form>

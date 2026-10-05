@@ -37,6 +37,18 @@ export const sendOTP = async (req, res, next) => {
       }
     }
 
+    // Validation for Forgot Password OTP
+    if ((purpose === 'forgot_password' || purpose === 'reset_password') && email) {
+      const emailNormalized = email.toLowerCase().trim();
+      const existingUser = await User.findOne({ email: emailNormalized });
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: '⚠️ No account found with this email address. Please register first.'
+        });
+      }
+    }
+
     const otp = generateOTP();
     let sentChannels = [];
     let emailResult = null;
@@ -738,17 +750,34 @@ export const updateUserProfile = async (req, res, next) => {
 // @access  Public
 export const resetPassword = async (req, res, next) => {
   try {
-    const { email, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
     if (!email || !newPassword) {
       return res.status(400).json({ success: false, message: 'Please provide email and new password.' });
     }
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
     }
+
+    const emailNormalized = email.toLowerCase().trim();
+
+    if (otp) {
+      const verifyRes = await verifyStoredOTP(emailNormalized, otp, 'forgot_password');
+      if (!verifyRes.success) {
+        const verifyFallback = await verifyStoredOTP(emailNormalized, otp, 'reset_password');
+        if (!verifyFallback.success) {
+          return res.status(400).json({ success: false, message: verifyRes.message || 'Invalid or expired OTP code.' });
+        }
+      }
+    }
+
+    const user = await User.findOne({ email: emailNormalized });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found.' });
+    }
+
     user.password = newPassword;
     await user.save();
-    res.json({ success: true, message: 'Password updated successfully.' });
+    res.json({ success: true, message: 'Password updated successfully. You may now sign in with your new password.' });
   } catch (error) {
     next(error);
   }

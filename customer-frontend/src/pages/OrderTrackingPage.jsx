@@ -8,6 +8,7 @@ import ReturnExchangeModal from '../components/ReturnExchangeModal';
 import ReturnPolicyModal from '../components/ReturnPolicyModal';
 import ReturnTrackingModal from '../components/ReturnTrackingModal';
 import CustomerLiveMapTracker from '../components/CustomerLiveMapTracker';
+import CustomerOrderChatModal from '../components/CustomerOrderChatModal';
 import { useSocket } from '../context/SocketContext';
 
 const RETURN_WINDOW_DAYS = 7;
@@ -26,6 +27,7 @@ export default function OrderTrackingPage() {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [showReturnTrackingModal, setShowReturnTrackingModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
 
   const fetchOrderData = () => {
     Promise.allSettled([
@@ -303,6 +305,27 @@ export default function OrderTrackingPage() {
                 }}
               >
                 <i className="fa-solid fa-star"></i> Write Product Review
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowChatModal(true)}
+                style={{
+                  background: '#0F766E',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.84rem',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)'
+                }}
+              >
+                <i className="fa-solid fa-comments"></i> Chat with Seller
               </button>
 
               {isReturnEligible && (
@@ -785,6 +808,15 @@ export default function OrderTrackingPage() {
           returnRequest={returnRequest}
           onClose={() => setShowReturnTrackingModal(false)}
           onCancelled={() => fetchOrderData()}
+        />
+      )}
+
+      {/* Customer <-> Seller Order Chat Modal */}
+      {showChatModal && order && (
+        <CustomerOrderChatModal
+          orderId={order._id}
+          isOpen={showChatModal}
+          onClose={() => setShowChatModal(false)}
         />
       )}
     </main>

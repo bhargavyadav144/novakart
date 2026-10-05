@@ -16,11 +16,21 @@ import {
   markCustomerUnreachable,
   getAdminAllOrders
 } from '../controllers/orderController.js';
+import {
+  getOrderChat,
+  sendOrderChatMessage,
+  requestOrderExchangeExtension
+} from '../controllers/orderChatController.js';
 import { authenticateUser } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { ROLES } from '../config/constants.js';
 
 const router = express.Router();
+
+// Order Chat Endpoints (Customer, Seller & Admin with 7-Day & Exchange Extension Rules)
+router.get('/:id/chat', authenticateUser, getOrderChat);
+router.post('/:id/chat', authenticateUser, sendOrderChatMessage);
+router.post('/:id/chat/exchange-extension', authenticateUser, requestOrderExchangeExtension);
 
 // Customer & General Endpoints
 router.post('/place', authenticateUser, placeOrder);

@@ -6,6 +6,8 @@ import SellerInvoiceModal from '../components/SellerInvoiceModal';
 import PackageShippingLabelModal from '../components/PackageShippingLabelModal';
 import BulkShippingLabelsModal from '../components/BulkShippingLabelsModal';
 import SellerOrderDetailsModal from '../components/SellerOrderDetailsModal';
+import OrderChatModal from '../components/OrderChatModal';
+import SellerBiometricModal from '../components/SellerBiometricModal';
 
 const FALLBACK_PRODUCT_IMG = 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=400&q=80';
 
@@ -23,6 +25,30 @@ export default function SellerOrders() {
   const [selectedLabelOrder, setSelectedLabelOrder] = useState(null);
   const [showBulkLabelsModal, setShowBulkLabelsModal] = useState(false);
   const [selectedDetailOrder, setSelectedDetailOrder] = useState(null);
+
+  // Customer Order Chat & Biometric Security Gate
+  const [selectedChatOrder, setSelectedChatOrder] = useState(null);
+  const [isBioModalOpen, setIsBioModalOpen] = useState(false);
+  const [isChatBioVerified, setIsChatBioVerified] = useState(false);
+  const [pendingChatOrder, setPendingChatOrder] = useState(null);
+
+  const handleOpenChat = (order) => {
+    if (isChatBioVerified) {
+      setSelectedChatOrder(order);
+    } else {
+      setPendingChatOrder(order);
+      setIsBioModalOpen(true);
+    }
+  };
+
+  const handleBioVerifiedSuccess = () => {
+    setIsChatBioVerified(true);
+    setIsBioModalOpen(false);
+    if (pendingChatOrder) {
+      setSelectedChatOrder(pendingChatOrder);
+      setPendingChatOrder(null);
+    }
+  };
 
 
   const fetchOrders = useCallback((isManual = false) => {
@@ -633,6 +659,26 @@ export default function SellerOrders() {
                           >
                             <i className="fa-solid fa-eye"></i> Details
                           </button>
+
+                          <button
+                            onClick={() => handleOpenChat(o)}
+                            style={{
+                              background: '#0F766E',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: '800',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title="Customer Support Chat (7-day return delivery window)"
+                          >
+                            <i className="fa-solid fa-comments"></i> Chat
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -677,6 +723,27 @@ export default function SellerOrders() {
         <BulkShippingLabelsModal
           orders={filteredOrders}
           onClose={() => setShowBulkLabelsModal(false)}
+        />
+      )}
+
+      {/* Customer Order Chat Modal */}
+      {selectedChatOrder && (
+        <OrderChatModal
+          orderId={selectedChatOrder._id}
+          isOpen={Boolean(selectedChatOrder)}
+          onClose={() => setSelectedChatOrder(null)}
+        />
+      )}
+
+      {/* Biometric Verification Gate before Chat */}
+      {isBioModalOpen && (
+        <SellerBiometricModal
+          isOpen={isBioModalOpen}
+          onClose={() => { setIsBioModalOpen(false); setPendingChatOrder(null); }}
+          onVerifiedSuccess={handleBioVerifiedSuccess}
+          mode="VERIFY"
+          actionContext="ORDER_CHAT"
+          actionLabel="Proprietor Identity Authentication to Open Customer Support Chat"
         />
       )}
     </div>

@@ -49,7 +49,7 @@ async function pushToGitHub() {
           name: 'bhargavyadav144',
           email: 'bhargavyadav144@users.noreply.github.com'
         },
-        message: 'feat(seller): mandatory registration biometrics (up to 3 fingerprints and 2 faces), existing seller reminder notifications, and biometric enrollment modal'
+        message: process.argv[3] || 'feat: seller verification onboarding gate, forgot password, admin approval confirmation email, 7-day post-delivery chat with exchange extension and anti-link filter, admin helpline'
       });
       console.log('🎉 New commit created:', sha);
     } catch {

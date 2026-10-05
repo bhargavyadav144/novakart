@@ -261,3 +261,60 @@ export const sendPasswordOtpEmail = async (email, name, otp) => {
 
   await sendHtmlEmail(email, `🔐 Password Reset Security OTP: ${otp}`, html);
 };
+
+// 7. Merchant Store Approval Confirmation Email Template
+export const sendSellerApprovalEmail = async (email, ownerName, storeName, approvedCategories = []) => {
+  const categoriesList = approvedCategories && approvedCategories.length > 0
+    ? approvedCategories.join(', ')
+    : 'All Standard Retail Categories';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px; background-color: #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
+      <div style="text-align: center; border-bottom: 2px solid #0f766e; padding-bottom: 20px; margin-bottom: 24px;">
+        <div style="font-size: 28px; font-weight: 800; color: #0f172a; letter-spacing: 0.5px;">
+          <span style="color: #0f766e;">Nova</span>Kart <span style="font-size: 14px; background: #ccfbf1; color: #0f766e; padding: 4px 10px; border-radius: 20px; font-weight: 700; vertical-align: middle;">Merchant Network</span>
+        </div>
+        <p style="color: #64748b; margin: 6px 0 0; font-size: 14px;">Store KYC Verification &amp; Account Approval Notice</p>
+      </div>
+
+      <div style="background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
+        <div style="font-size: 2rem; margin-bottom: 8px;">🎉</div>
+        <h2 style="color: #065f46; margin: 0 0 6px 0; font-size: 20px;">Congratulations, ${ownerName || 'Merchant'}!</h2>
+        <p style="color: #047857; margin: 0; font-size: 15px; font-weight: 600;">
+          Your store "<strong>${storeName}</strong>" has been officially reviewed and approved by the NovaKart Administration!
+        </p>
+      </div>
+
+      <div style="margin-bottom: 24px; color: #334155; font-size: 14px; line-height: 1.6;">
+        <p>Your store profile, premises verification, and compliance documentation have passed admin clearance. <strong>Your merchant portal is now fully activated with the real operational interface!</strong></p>
+        
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 16px 0;">
+          <div style="font-weight: 700; color: #0f172a; margin-bottom: 8px;">Approved Catalog Categories:</div>
+          <div style="color: #0f766e; font-weight: 600; font-size: 13.5px;">✓ ${categoriesList}</div>
+        </div>
+
+        <h3 style="color: #0f172a; font-size: 16px; margin: 18px 0 10px 0;">Unlocked Operational Features:</h3>
+        <ul style="padding-left: 20px; margin: 0; color: #475569;">
+          <li style="margin-bottom: 6px;"><strong>Add &amp; Publish Products:</strong> Post store items in your approved categories.</li>
+          <li style="margin-bottom: 6px;"><strong>Receive &amp; Fulfill Orders:</strong> Accept customer orders and print shipping labels.</li>
+          <li style="margin-bottom: 6px;"><strong>Bank Payouts &amp; Settlements:</strong> Access direct treasury disbursals.</li>
+          <li style="margin-bottom: 6px;"><strong>Customer Order Chat:</strong> 7-day post-delivery customer support chat.</li>
+          <li style="margin-bottom: 6px;"><strong>Admin Helpline:</strong> Direct helpline support with NovaKart admins.</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin: 32px 0 20px;">
+        <a href="https://seller-frontend-gamma.vercel.app/login" style="background: #0f766e; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 800; font-size: 15px; display: inline-block;">
+          Sign In to Real Merchant Portal &rarr;
+        </a>
+      </div>
+
+      <div style="text-align: center; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 24px;">
+        NovaKart Marketplace &bull; Security &amp; Compliance Department &bull; Automated Dispatch
+      </div>
+    </div>
+  `;
+
+  await sendHtmlEmail(email, `🎉 Congratulations! Your NovaKart Merchant Store "${storeName}" Has Been Approved!`, html);
+};
+

@@ -60,7 +60,7 @@ export function SellerAuthProvider({ children }) {
       setToken(data.token);
       localStorage.setItem('novakart_seller_user', JSON.stringify(data.user));
       localStorage.setItem('novakart_seller_token', data.token);
-      return { success: true, message: data.message };
+      return { success: true, user: data.user, message: data.message };
     } catch (err) {
       return { success: false, message: err.response?.data?.message || 'Login failed' };
     } finally {
@@ -76,7 +76,7 @@ export function SellerAuthProvider({ children }) {
       setToken(data.token);
       localStorage.setItem('novakart_seller_user', JSON.stringify(data.user));
       localStorage.setItem('novakart_seller_token', data.token);
-      return { success: true, message: data.message };
+      return { success: true, user: data.user, message: data.message };
     } catch (err) {
       return { success: false, message: err.response?.data?.message || 'Registration failed' };
     } finally {

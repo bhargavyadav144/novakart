@@ -7,6 +7,7 @@ import { emitToUser } from '../services/socketService.js';
 import { ROLES, ACCOUNT_STATUSES, ORDER_STATUSES } from '../config/constants.js';
 import { createNotification } from './notificationController.js';
 import { calculateVerificationProgress } from './sellerController.js';
+import { sendSellerApprovalEmail } from '../utils/emailService.js';
 
 // @desc    Admin Master Statistics Overview
 // @route   GET /api/admin/dashboard-stats
@@ -336,6 +337,22 @@ export const approveSeller = async (req, res, next) => {
       type: 'SELLER_APPROVAL',
       link: '/',
     });
+
+    // Send official confirmation email
+    try {
+      const sellerUser = await User.findById(seller.userId);
+      const targetEmail = sellerUser?.email || seller.email;
+      if (targetEmail) {
+        await sendSellerApprovalEmail(
+          targetEmail,
+          sellerUser?.name || seller.ownerName,
+          seller.storeName,
+          seller.approvedProductCategories
+        );
+      }
+    } catch (mailErr) {
+      console.warn('⚠️ [Admin]: Could not send approval email to seller:', mailErr.message);
+    }
 
     res.json({ success: true, message: `Seller store '${seller.storeName}' approved.`, seller });
   } catch (error) {

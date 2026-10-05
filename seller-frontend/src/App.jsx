@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { SellerAuthProvider, useSellerAuth } from './context/SellerAuthContext';
 import SellerSidebar from './components/SellerSidebar';
 
@@ -14,6 +14,7 @@ import SellerPayouts from './pages/SellerPayouts';
 import SellerLogin from './pages/SellerLogin';
 import SellerRegister from './pages/SellerRegister';
 import SellerVerificationPage from './pages/SellerVerificationPage';
+import SellerHelplinePage from './pages/SellerHelplinePage';
 import TermsPage from './pages/TermsPage';
 import SellerBiometricReminderBanner from './components/SellerBiometricReminderBanner';
 
@@ -21,11 +22,13 @@ import './styles/seller.css';
 
 function ProtectedSellerLayout({ children, requireApproval = false }) {
   const { sellerUser } = useSellerAuth();
+  const location = useLocation();
+
   if (!sellerUser) return <Navigate to="/login" replace />;
 
   const isPending = !sellerUser.isApproved;
 
-  // If a route specifically requires approval (like adding products) and seller is pending:
+  // If a route specifically requires approval (like adding products or dashboard) and seller is pending:
   if (requireApproval && isPending) {
     return (
       <div className="seller-layout">
@@ -46,23 +49,41 @@ function ProtectedSellerLayout({ children, requireApproval = false }) {
                 Store Under Admin Verification
               </h2>
               <p style={{ color: '#64748b', fontSize: '0.92rem', lineHeight: '1.6', margin: '0 0 24px 0' }}>
-                Your merchant application is currently pending admin review. Product catalog publishing and customer storefront visibility unlock as soon as the administrator clears your store premises and product categories.
+                Your merchant application is currently pending admin review. The real operational interface (catalog publishing, live store orders, payouts, and customer chat) unlocks automatically once the administrator approves your store verification profile.
               </p>
-              <a
-                href="/verification"
-                style={{
-                  display: 'inline-block',
-                  background: '#0f766e',
-                  color: '#ffffff',
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  fontWeight: '800',
-                  textDecoration: 'none',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Open Verification Center &amp; KYC Progress &rarr;
-              </a>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <a
+                  href="/verification"
+                  style={{
+                    display: 'inline-block',
+                    background: '#0f766e',
+                    color: '#ffffff',
+                    padding: '12px 24px',
+                    borderRadius: '10px',
+                    fontWeight: '800',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Open Verification Hub &rarr;
+                </a>
+                <a
+                  href="/helpline"
+                  style={{
+                    display: 'inline-block',
+                    background: '#f1f5f9',
+                    color: '#0f172a',
+                    border: '1px solid #cbd5e1',
+                    padding: '12px 24px',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <i className="fa-solid fa-headset" style={{ marginRight: '6px' }}></i> Admin Helpline
+                </a>
+              </div>
             </div>
           </div>
         </main>
@@ -94,20 +115,36 @@ function ProtectedSellerLayout({ children, requireApproval = false }) {
                 <strong>Store Under Review:</strong> Complete all 100% verification milestones so Admin can clear your store products for customers.
               </span>
             </div>
-            <a
-              href="/verification"
-              style={{
-                background: '#d97706',
-                color: '#ffffff',
-                padding: '6px 14px',
-                borderRadius: '6px',
-                fontWeight: '700',
-                textDecoration: 'none',
-                fontSize: '0.78rem'
-              }}
-            >
-              KYC Progress &rarr;
-            </a>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <a
+                href="/verification"
+                style={{
+                  background: '#d97706',
+                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontWeight: '700',
+                  textDecoration: 'none',
+                  fontSize: '0.78rem'
+                }}
+              >
+                KYC Progress &rarr;
+              </a>
+              <a
+                href="/helpline"
+                style={{
+                  background: '#0f766e',
+                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontWeight: '700',
+                  textDecoration: 'none',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Helpline
+              </a>
+            </div>
           </div>
         )}
         <SellerBiometricReminderBanner />
@@ -128,18 +165,23 @@ export default function App() {
           <Route path="/register" element={<SellerRegister />} />
           <Route path="/terms" element={<TermsPage />} />
           
-          {/* Main Dashboard & Verification */}
-          <Route path="/" element={<ProtectedSellerLayout><SellerDashboard /></ProtectedSellerLayout>} />
-          <Route path="/verification" element={<ProtectedSellerLayout><SellerVerificationPage /></ProtectedSellerLayout>} />
+          {/* Main Operational Interface: Requires KYC Approval */}
+          <Route path="/" element={<ProtectedSellerLayout requireApproval={true}><SellerDashboard /></ProtectedSellerLayout>} />
 
-          {/* Product Management (Requires KYC Approval) */}
-          <Route path="/products" element={<ProtectedSellerLayout><SellerProducts /></ProtectedSellerLayout>} />
+          {/* Verification Hub & Admin Helpline: Always available to merchant */}
+          <Route path="/verification" element={<ProtectedSellerLayout><SellerVerificationPage /></ProtectedSellerLayout>} />
+          <Route path="/helpline" element={<ProtectedSellerLayout><SellerHelplinePage /></ProtectedSellerLayout>} />
+
+          {/* Product Management: Requires KYC Approval */}
+          <Route path="/products" element={<ProtectedSellerLayout requireApproval={true}><SellerProducts /></ProtectedSellerLayout>} />
           <Route path="/products/new" element={<ProtectedSellerLayout requireApproval={true}><AddProductPage /></ProtectedSellerLayout>} />
           <Route path="/products/edit/:id" element={<ProtectedSellerLayout requireApproval={true}><EditProductPage /></ProtectedSellerLayout>} />
 
-          {/* Orders, Settlements & Profile */}
-          <Route path="/orders" element={<ProtectedSellerLayout><SellerOrders /></ProtectedSellerLayout>} />
-          <Route path="/payouts" element={<ProtectedSellerLayout><SellerPayouts /></ProtectedSellerLayout>} />
+          {/* Orders & Settlements: Requires KYC Approval */}
+          <Route path="/orders" element={<ProtectedSellerLayout requireApproval={true}><SellerOrders /></ProtectedSellerLayout>} />
+          <Route path="/payouts" element={<ProtectedSellerLayout requireApproval={true}><SellerPayouts /></ProtectedSellerLayout>} />
+
+          {/* Profile Settings */}
           <Route path="/profile" element={<ProtectedSellerLayout><SellerProfile /></ProtectedSellerLayout>} />
         </Routes>
       </Router>

@@ -10,6 +10,10 @@ import {
   updateVerificationStage,
   requestSellerPayout
 } from '../controllers/sellerController.js';
+import {
+  getSellerHelpline,
+  sendSellerHelplineMessage
+} from '../controllers/sellerHelplineController.js';
 import { authenticateUser } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { ROLES } from '../config/constants.js';
@@ -17,6 +21,10 @@ import { ROLES } from '../config/constants.js';
 const router = express.Router();
 
 router.use(authenticateUser, authorizeRoles(ROLES.SELLER));
+
+// Admin Helpline for Sellers
+router.get('/helpline', getSellerHelpline);
+router.post('/helpline/message', sendSellerHelplineMessage);
 
 router.get('/dashboard-stats', getSellerDashboardStats);
 router.get('/profile', getSellerProfile);

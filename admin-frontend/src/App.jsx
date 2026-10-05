@@ -13,6 +13,7 @@ import AdminOrders from './pages/AdminOrders';
 import AdminWarehouses from './pages/AdminWarehouses';
 import AdminReturnsPage from './pages/AdminReturnsPage';
 import AdminHelpCenterPage from './pages/AdminHelpCenterPage';
+import AdminHelpline from './pages/AdminHelpline';
 import AdminTerms from './pages/AdminTerms';
 import AdminLogin from './pages/AdminLogin';
 
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/warehouses" element={<ProtectedAdminLayout><AdminWarehouses /></ProtectedAdminLayout>} />
           <Route path="/returns" element={<ProtectedAdminLayout><AdminReturnsPage /></ProtectedAdminLayout>} />
           <Route path="/help-center" element={<ProtectedAdminLayout><AdminHelpCenterPage /></ProtectedAdminLayout>} />
+          <Route path="/helpline" element={<ProtectedAdminLayout><AdminHelpline /></ProtectedAdminLayout>} />
           <Route path="/terms" element={<ProtectedAdminLayout><AdminTerms /></ProtectedAdminLayout>} />
         </Routes>
       </Router>
