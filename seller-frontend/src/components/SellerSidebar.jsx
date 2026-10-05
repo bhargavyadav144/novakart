@@ -76,7 +76,7 @@ export default function SellerSidebar() {
         <NavLink to="/helpline">
           <i className="fa-solid fa-headset"></i>
           <span>Admin Helpline</span>
-          <span style={{ marginLeft: 'auto', fontSize: '0.65rem', background: '#0f766e', color: '#fff', padding: '1px 5px', borderRadius: '6px' }}>Help</span>
+          <span style={{ marginLeft: 'auto', fontSize: '0.65rem', background: '#1A237E', color: '#fff', padding: '1px 5px', borderRadius: '6px' }}>Help</span>
         </NavLink>
 
         <NavLink to="/profile">

@@ -8,37 +8,53 @@ import { ROLES } from '../config/constants.js';
 const DEFAULT_TERMS = {
   seller: {
     role: 'seller',
-    title: 'NovaKart Merchant Agreement & Store Governance Policy',
-    version: '2.0',
-    effectiveDate: new Date('2026-10-01'),
-    summary: 'Updated merchant guidelines covering mandatory biometrics for settlement, premises verification, and product category clearance.',
+    title: 'NovaKart Official Merchant Agreement, Store Governance & Operational Policy',
+    version: '3.0',
+    effectiveDate: new Date('2026-10-05'),
+    summary: 'Comprehensive legal and operational terms governing merchant onboarding, mandatory 2-face & 3-fingerprint biometric KYC, physical/home premises verification, admin category clearance, 7-day post-delivery chat rules, zero tolerance on off-platform links, and financial escrow settlements.',
     sections: [
       {
-        title: '1. Merchant Eligibility & Registration Verification',
-        content: 'To establish a store on NovaKart, merchants must complete identity verification, provide proof of physical premises or registered home business, and undergo 2-face + 3-fingerprint biometric KYC enrollment.'
+        title: '1. Merchant Eligibility & Mandatory Biometric KYC Enrollment',
+        content: 'To establish and maintain an active merchant storefront on NovaKart, all store owners must undergo strict identity verification. This includes mandatory enrollment of two (2) distinct facial angles (Frontal View and Ergonomic Side Angle) and three (3) unique touch fingerprints. Biometric identifiers are encrypted and securely utilized to authorize critical account events including bank account modifications, UPI credentials, and financial payout withdrawals.'
       },
       {
-        title: '2. Product Category Clearance & Listing Standards',
-        content: 'Merchants may only publish products within categories approved by the NovaKart Administrator. All products must conform to legal, health, and intellectual property standards. Counterfeit or prohibited items result in immediate account termination.'
+        title: '2. Premises Classification & Operational Verification',
+        content: 'Merchants must declare and verify their operating facility type: Physical Commercial Store or Registered Home Business. Physical stores must submit storefront signage imagery, interior inventory proof, and GPS geofence coordinates. Home businesses must supply utility bills (under 60 days old) and local municipal trading permits. All premises documentation undergoes manual inspection and approval by the NovaKart Platform Administrator prior to storefront listing.'
       },
       {
-        title: '3. Order Fulfillment & Dispatch SLAs',
-        content: 'Merchants must acknowledge and pack orders within 15 minutes of receipt for standard delivery or 5 minutes for express delivery. Failure to adhere to fulfillment SLAs may impact merchant store ratings and listing prominence.'
+        title: '3. Product Category Clearance & Anti-Counterfeit Mandate',
+        content: 'Merchants are strictly prohibited from publishing listings in product categories without prior explicit clearance from Platform Administration. Every new product category requested must be vetted and authorized by Admin before items become visible to customers. NovaKart maintains a zero-tolerance policy against counterfeit, expired, adulterated, or hazardous merchandise. Violation results in instant product takedown and potential permanent platform de-registration.'
       },
       {
-        title: '4. Biometric Security for Financial Operations',
-        content: 'For your security, changes to bank settlement details, UPI accounts, or manual earnings withdrawal requests strictly require matching biometric verification (registered face or touch fingerprint) alongside your password.'
+        title: '4. Customer Order Communication & Strict 7-Day Window Policy',
+        content: 'NovaKart provides an integrated in-app order chat service to facilitate smooth delivery coordination and customer support. The communication channel activates upon order confirmation and remains functional during transit and for exactly seven (7) calendar days following confirmed delivery. Upon the expiration of seven (7) days post-delivery, the customer-merchant chat channel automatically disables and locks permanently to preserve operational closure.'
       },
       {
-        title: '5. Commission, Settlement Ledgers & Escrow',
-        content: 'Platform fees are deducted automatically upon order completion. Payouts are transferred via IMPS/NEFT to the verified bank account according to the agreed settlement cycle (T+1 or T+2).'
+        title: '5. Zero-Tolerance Prohibition on External Links & Off-Platform Contacts',
+        content: 'To prevent fraud, protect consumer security, and ensure transaction integrity, merchants are strictly forbidden from transmitting external hyperlinks (HTTP/HTTPS URLs), personal telephone numbers, WhatsApp contact cards, UPI handles, or requests for direct payment in customer chats or platform helpline tickets. Automated deep-inspection filters intercept and block unauthorized links. Repeated transmission of external links triggers instant account review and administrative penalties.'
       },
       {
-        title: '6. Amendments & Policy Updates',
-        content: 'NovaKart reserves the right to modify these Terms & Conditions. Merchants will receive in-app notifications whenever policy updates occur. Continued use of the Merchant Portal constitutes acceptance of updated terms.'
+        title: '6. 7-Day Post-Delivery Return & Exchange Fulfillment SLA',
+        content: 'Customers are entitled to request returns or product replacements within seven (7) calendar days post physical delivery. When a merchant accepts an exchange request, the platform automatically grants an additional seven (7) day fulfillment extension window for product exchange transit, reverse logistics pickup, and replacement dispatch. Once the return/exchange window concludes, the transaction is finalized.'
+      },
+      {
+        title: '7. Financial Escrow, Platform Commission & Biometric Payout Authorization',
+        content: 'All customer payments remain held in secure NovaKart escrow until successful order delivery and lapse of the return dispute window. Applicable platform commission fees are deducted per order ledger. Withdrawal requests or modifications to linked bank account credentials (IFSC, Account Number) strictly require matching biometric verification (Face or Fingerprint scan) before payout disbursement via IMPS / NEFT / RTGS.'
+      },
+      {
+        title: '8. Order Fulfillment SLAs & Packaging Compliance',
+        content: 'Merchants must acknowledge and pack incoming customer orders within fifteen (15) minutes of receipt for standard delivery or five (5) minutes for hyper-local express delivery. All shipments must bear valid NovaKart digital dispatch barcodes and tamper-evident packaging. Failure to maintain fulfillment speed SLAs directly reduces merchant quality scoring and listing visibility.'
+      },
+      {
+        title: '9. Dispute Resolution, Administrative Helpline & Mediation',
+        content: 'Merchants have 24/7 access to the direct Admin Helpline Desk to resolve operational queries, category approvals, tax reconciliation, and order escalations. In the event of a customer dispute regarding damaged goods or non-delivery, Platform Administration acts as the final binding mediator.'
+      },
+      {
+        title: '10. Dynamic Policy Amendments & Continued Compliance',
+        content: 'NovaKart reserves the right to revise operational policies, fee structures, and security standards to comply with e-commerce regulations. When updates are published by Platform Administration, all merchants receive instant in-portal notifications. Continued operation of the merchant account constitutes legal and binding acceptance of amended terms.'
       }
     ],
-    fullText: 'Welcome to the NovaKart Merchant Portal. By registering and operating a store on NovaKart, you agree to comply with our store governance, biometric security, product category clearance, and fulfillment standards.'
+    fullText: 'Official NovaKart Store Partner Agreement. All merchants must complete biometric KYC, facility verification, and comply with category clearance before listing products. By operating a store on NovaKart, you agree to these legally binding terms, fulfillment SLAs, customer chat rules, and biometric governance standards.'
   },
   customer: {
     role: 'customer',

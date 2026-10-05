@@ -192,7 +192,7 @@ export default function SellerRegister() {
         
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#ecfdf5', color: '#0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 12px auto' }}>
+          <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#EEF2FF', color: '#1A237E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 12px auto' }}>
             <i className="fa-solid fa-store"></i>
           </div>
           <h1 style={{ fontSize: '1.65rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
@@ -212,7 +212,7 @@ export default function SellerRegister() {
         )}
 
         {successMsg && (
-          <div style={{ background: '#ecfdf5', color: '#047857', padding: '10px 14px', borderRadius: '8px', fontSize: '0.84rem', marginBottom: '16px', border: '1px solid #a7f3d0' }}>
+          <div style={{ background: '#EFF6FF', color: '#1E40AF', padding: '10px 14px', borderRadius: '8px', fontSize: '0.84rem', marginBottom: '16px', border: '1px solid #BFDBFE' }}>
             <i className="fa-solid fa-circle-check" style={{ marginRight: '6px' }}></i>
             {successMsg}
           </div>
@@ -236,13 +236,13 @@ export default function SellerRegister() {
           </div>
 
           {/* 2. EMAIL ADDRESS & 3. EMAIL OTP VERIFICATION */}
-          <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: isEmailVerified ? '1.5px solid #10b981' : '1px solid #e2e8f0' }}>
+          <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: isEmailVerified ? '1.5px solid #1E40AF' : '1px solid #e2e8f0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>
                 2. Business Email &amp; OTP Verification *
               </label>
               {isEmailVerified && (
-                <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: '800', padding: '2px 8px', borderRadius: '12px' }}>
+                <span style={{ background: '#DBEAFE', color: '#1E40AF', fontSize: '0.72rem', fontWeight: '800', padding: '2px 8px', borderRadius: '12px' }}>
                   ✓ Email Verified
                 </span>
               )}
@@ -251,7 +251,7 @@ export default function SellerRegister() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
                 type="email"
-                style={{ ...inputStyle, flex: 1, background: isEmailVerified ? '#f0fdf4' : '#ffffff' }}
+                style={{ ...inputStyle, flex: 1, background: isEmailVerified ? '#F8FAFC' : '#ffffff' }}
                 placeholder="storeowner@merchant.com"
                 value={email}
                 onChange={(e) => {
@@ -268,7 +268,7 @@ export default function SellerRegister() {
                   onClick={handleSendEmailOTP}
                   disabled={sendingOtp || (resendTimer > 0 && isOtpSent)}
                   style={{
-                    background: '#0f766e',
+                    background: '#1A237E',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '8px',
@@ -304,7 +304,7 @@ export default function SellerRegister() {
                     onClick={handleVerifyEmailOTP}
                     disabled={verifyingOtp || otpCode.length < 6}
                     style={{
-                      background: '#10b981',
+                      background: '#1E40AF',
                       color: '#ffffff',
                       border: 'none',
                       borderRadius: '8px',
@@ -377,31 +377,33 @@ export default function SellerRegister() {
               <div
                 onClick={() => setStoreType('retail_store')}
                 style={{
-                  border: storeType === 'retail_store' ? '2px solid #0f766e' : '1.5px solid #e2e8f0',
-                  background: storeType === 'retail_store' ? '#f0fdf4' : '#ffffff',
+                  border: storeType === 'retail_store' ? '2px solid #1A237E' : '1.5px solid #e2e8f0',
+                  background: storeType === 'retail_store' ? '#EEF2FF' : '#ffffff',
                   borderRadius: '8px',
                   padding: '10px',
                   cursor: 'pointer',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <i className="fa-solid fa-store" style={{ color: storeType === 'retail_store' ? '#0f766e' : '#64748b' }}></i>
-                <div style={{ fontSize: '0.78rem', fontWeight: '800', marginTop: '2px' }}>Physical Store</div>
+                <i className="fa-solid fa-store" style={{ color: storeType === 'retail_store' ? '#1A237E' : '#64748b' }}></i>
+                <div style={{ fontSize: '0.78rem', fontWeight: '800', marginTop: '2px', color: storeType === 'retail_store' ? '#1A237E' : '#334155' }}>Physical Store</div>
               </div>
 
               <div
                 onClick={() => setStoreType('home_business')}
                 style={{
-                  border: storeType === 'home_business' ? '2px solid #0f766e' : '1.5px solid #e2e8f0',
-                  background: storeType === 'home_business' ? '#f0fdf4' : '#ffffff',
+                  border: storeType === 'home_business' ? '2px solid #1A237E' : '1.5px solid #e2e8f0',
+                  background: storeType === 'home_business' ? '#EEF2FF' : '#ffffff',
                   borderRadius: '8px',
                   padding: '10px',
                   cursor: 'pointer',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <i className="fa-solid fa-house" style={{ color: storeType === 'home_business' ? '#0f766e' : '#64748b' }}></i>
-                <div style={{ fontSize: '0.78rem', fontWeight: '800', marginTop: '2px' }}>Home Business</div>
+                <i className="fa-solid fa-house" style={{ color: storeType === 'home_business' ? '#1A237E' : '#64748b' }}></i>
+                <div style={{ fontSize: '0.78rem', fontWeight: '800', marginTop: '2px', color: storeType === 'home_business' ? '#1A237E' : '#334155' }}>Home Business</div>
               </div>
             </div>
           </div>
@@ -439,7 +441,7 @@ export default function SellerRegister() {
                 type="password"
                 style={{
                   ...inputStyle,
-                  borderColor: confirmPassword && password !== confirmPassword ? '#ef4444' : confirmPassword && password === confirmPassword ? '#10b981' : '#cbd5e1'
+                  borderColor: confirmPassword && password !== confirmPassword ? '#ef4444' : confirmPassword && password === confirmPassword ? '#1A237E' : '#cbd5e1'
                 }}
                 placeholder="Re-enter password"
                 value={confirmPassword}
@@ -456,7 +458,7 @@ export default function SellerRegister() {
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                style={{ marginTop: '3px', width: '16px', height: '16px', accentColor: '#0f766e' }}
+                style={{ marginTop: '3px', width: '16px', height: '16px', accentColor: '#1A237E' }}
                 required
               />
               <span style={{ lineHeight: '1.5' }}>
@@ -465,7 +467,7 @@ export default function SellerRegister() {
                   to="/terms"
                   target="_blank"
                   rel="noreferrer"
-                  style={{ color: '#0f766e', fontWeight: '800', textDecoration: 'underline' }}
+                  style={{ color: '#1A237E', fontWeight: '800', textDecoration: 'underline' }}
                 >
                   Terms &amp; Conditions Policy
                 </Link>
@@ -488,7 +490,7 @@ export default function SellerRegister() {
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: '22px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', fontSize: '0.85rem', color: '#64748B' }}>
           Already have a Merchant Account?{' '}
-          <Link to="/login" style={{ color: '#0f766e', fontWeight: '800' }}>
+          <Link to="/login" style={{ color: '#1A237E', fontWeight: '800' }}>
             Sign In Here
           </Link>
         </div>

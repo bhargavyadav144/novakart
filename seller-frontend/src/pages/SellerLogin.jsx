@@ -162,7 +162,7 @@ export default function SellerLogin() {
         )}
 
         {successMsg && (
-          <div style={{ background: '#ecfdf5', color: '#047857', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '16px', border: '1px solid #a7f3d0' }}>
+          <div style={{ background: '#eff6ff', color: '#1d4ed8', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '16px', border: '1px solid #bfdbfe' }}>
             <i className="fa-solid fa-circle-check" style={{ marginRight: '6px' }}></i>
             {successMsg}
           </div>
@@ -199,7 +199,7 @@ export default function SellerLogin() {
                     setErrorMsg('');
                     setSuccessMsg('');
                   }}
-                  style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '700', padding: 0 }}
+                  style={{ background: 'none', border: 'none', color: '#1A237E', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '700', padding: 0 }}
                 >
                   Forgot Password?
                 </button>
@@ -270,7 +270,7 @@ export default function SellerLogin() {
                   <button
                     type="button"
                     onClick={() => { setLoginMode('password'); setErrorMsg(''); setSuccessMsg(''); }}
-                    style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '700' }}
+                    style={{ background: 'none', border: 'none', color: '#1A237E', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '700' }}
                   >
                     ← Back to Merchant Sign In
                   </button>
@@ -356,7 +356,7 @@ export default function SellerLogin() {
                       <button
                         type="button"
                         onClick={handleSendResetOTP}
-                        style={{ background: 'none', border: 'none', color: '#0f766e', cursor: 'pointer', fontWeight: '700', fontSize: '0.8rem' }}
+                        style={{ background: 'none', border: 'none', color: '#1A237E', cursor: 'pointer', fontWeight: '700', fontSize: '0.8rem' }}
                       >
                         Resend Code
                       </button>
@@ -368,7 +368,7 @@ export default function SellerLogin() {
                   <button
                     type="button"
                     onClick={() => { setLoginMode('password'); setErrorMsg(''); setSuccessMsg(''); }}
-                    style={{ background: 'none', border: 'none', color: '#0f766e', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '700' }}
+                    style={{ background: 'none', border: 'none', color: '#1A237E', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '700' }}
                   >
                     ← Back to Merchant Sign In
                   </button>

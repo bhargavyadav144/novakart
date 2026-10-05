@@ -104,7 +104,7 @@ export default function SellerHelplinePage() {
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '16px' }}>
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <i className="fa-solid fa-headset" style={{ color: '#0f766e' }}></i> Admin Helpline Desk
+          <i className="fa-solid fa-headset" style={{ color: '#1A237E' }}></i> Admin Helpline Desk
         </h1>
         <p style={{ color: '#64748B', fontSize: '0.88rem', margin: '4px 0 0' }}>
           Direct communication channel with NovaKart Platform Administration for KYC verification, store approval, product categories, and settlements.
@@ -145,8 +145,8 @@ export default function SellerHelplinePage() {
             </span>
             <span style={{
               fontSize: '0.72rem',
-              background: '#ccfbf1',
-              color: '#0f766e',
+              background: '#EEF2FF',
+              color: '#1A237E',
               padding: '2px 8px',
               borderRadius: '12px',
               fontWeight: '700'
@@ -252,7 +252,7 @@ export default function SellerHelplinePage() {
                     maxWidth: '75%',
                     padding: '12px 16px',
                     borderRadius: isMerchant ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    background: isMerchant ? '#0f766e' : '#ffffff',
+                    background: isMerchant ? '#1A237E' : '#ffffff',
                     color: isMerchant ? '#ffffff' : '#0f172a',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     border: isMerchant ? 'none' : '1px solid #e2e8f0',
@@ -295,7 +295,7 @@ export default function SellerHelplinePage() {
               type="submit"
               disabled={sending || !inputMsg.trim() || Boolean(linkWarning)}
               style={{
-                background: linkWarning ? '#94a3b8' : '#0f766e',
+                background: linkWarning ? '#94a3b8' : '#1A237E',
                 color: '#ffffff',
                 border: 'none',
                 padding: '0 24px',

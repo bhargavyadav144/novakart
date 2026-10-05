@@ -245,7 +245,7 @@ export default function OrderChatModal({ orderId, isOpen, onClose }) {
               onClick={handleRequestExchange}
               disabled={extending}
               style={{
-                background: '#0f766e',
+                background: '#1A237E',
                 color: '#fff',
                 border: 'none',
                 padding: '5px 12px',
@@ -341,7 +341,7 @@ export default function OrderChatModal({ orderId, isOpen, onClose }) {
                     maxWidth: '75%',
                     padding: '10px 14px',
                     borderRadius: isSeller ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    background: isSeller ? '#0f766e' : '#ffffff',
+                    background: isSeller ? '#1A237E' : '#ffffff',
                     color: isSeller ? '#ffffff' : '#0f172a',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     border: isSeller ? 'none' : '1px solid #e2e8f0',
@@ -397,7 +397,7 @@ export default function OrderChatModal({ orderId, isOpen, onClose }) {
                 type="submit"
                 disabled={sending || !inputMsg.trim() || Boolean(linkWarning)}
                 style={{
-                  background: linkWarning ? '#94a3b8' : '#0f766e',
+                  background: linkWarning ? '#94a3b8' : '#1A237E',
                   color: '#ffffff',
                   border: 'none',
                   padding: '0 20px',

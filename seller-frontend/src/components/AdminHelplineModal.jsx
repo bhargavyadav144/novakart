@@ -133,7 +133,7 @@ export default function AdminHelplineModal({ isOpen, onClose }) {
       }}>
         {/* Header */}
         <div style={{
-          background: '#0f766e',
+          background: 'linear-gradient(135deg, #1A237E 0%, #1E40AF 100%)',
           color: '#ffffff',
           padding: '18px 22px',
           display: 'flex',
@@ -147,7 +147,7 @@ export default function AdminHelplineModal({ isOpen, onClose }) {
               </span>
               <span style={{
                 fontSize: '0.72rem',
-                background: '#14b8a6',
+                background: 'rgba(255, 255, 255, 0.2)',
                 color: '#fff',
                 padding: '2px 8px',
                 borderRadius: '12px',
@@ -156,7 +156,7 @@ export default function AdminHelplineModal({ isOpen, onClose }) {
                 Direct Admin Desk
               </span>
             </div>
-            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#ccfbf1' }}>
+            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#DBEAFE' }}>
               Inquiries regarding KYC clearance, category approvals, payments &amp; catalog support
             </p>
           </div>
@@ -191,7 +191,7 @@ export default function AdminHelplineModal({ isOpen, onClose }) {
           alignItems: 'center'
         }}>
           <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-            Store: <strong>{sellerUser?.storeName || 'My Store'}</strong> &bull; Status: <strong style={{ color: '#0f766e' }}>{thread?.status || 'ACTIVE'}</strong>
+            Store: <strong>{sellerUser?.storeName || 'My Store'}</strong> &bull; Status: <strong style={{ color: '#1A237E' }}>{thread?.status || 'ACTIVE'}</strong>
           </span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -290,7 +290,7 @@ export default function AdminHelplineModal({ isOpen, onClose }) {
                     maxWidth: '75%',
                     padding: '10px 14px',
                     borderRadius: isMerchant ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    background: isMerchant ? '#0f766e' : '#ffffff',
+                    background: isMerchant ? '#1A237E' : '#ffffff',
                     color: isMerchant ? '#ffffff' : '#0f172a',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     border: isMerchant ? 'none' : '1px solid #e2e8f0',
@@ -333,7 +333,7 @@ export default function AdminHelplineModal({ isOpen, onClose }) {
               type="submit"
               disabled={sending || !inputMsg.trim() || Boolean(linkWarning)}
               style={{
-                background: linkWarning ? '#94a3b8' : '#0f766e',
+                background: linkWarning ? '#94a3b8' : '#1A237E',
                 color: '#ffffff',
                 border: 'none',
                 padding: '0 20px',

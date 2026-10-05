@@ -604,7 +604,7 @@ export default function SellerProfile() {
                 style={{
                   padding: '6px 14px',
                   borderRadius: '8px',
-                  background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
+                  background: 'linear-gradient(135deg, #1A237E 0%, #1E40AF 100%)',
                   color: '#ffffff',
                   border: 'none',
                   fontSize: '0.8rem',

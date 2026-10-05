@@ -154,10 +154,10 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
       {!isComplete ? (
         <div style={{
           background: '#ffffff',
-          border: '1.5px solid #0f766e',
+          border: '1.5px solid #1A237E',
           borderRadius: '16px',
           padding: '24px',
-          boxShadow: '0 4px 16px rgba(15, 118, 110, 0.08)',
+          boxShadow: '0 4px 16px rgba(26, 35, 126, 0.08)',
           position: 'relative',
           overflow: 'hidden'
         }}>
@@ -187,7 +187,7 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
             </div>
 
             <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '2rem', fontWeight: '900', color: '#0f766e' }}>
+              <span style={{ fontSize: '2rem', fontWeight: '900', color: '#1A237E' }}>
                 {progress}%
               </span>
             </div>
@@ -206,7 +206,7 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
             <div style={{
               width: `${progress}%`,
               height: '100%',
-              background: 'linear-gradient(90deg, #0f766e 0%, #14b8a6 100%)',
+              background: 'linear-gradient(90deg, #1A237E 0%, #2563EB 100%)',
               transition: 'width 0.4s ease-out'
             }}></div>
           </div>
@@ -270,8 +270,8 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
             onClick={() => setShowCelebration(true)}
             style={{
               background: '#ffffff',
-              border: '1px solid #10b981',
-              color: '#0f766e',
+              border: '1px solid #1A237E',
+              color: '#1A237E',
               padding: '8px 16px',
               borderRadius: '8px',
               fontSize: '0.82rem',
@@ -403,7 +403,7 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
               style={{
                 padding: '8px 18px',
                 borderRadius: '8px',
-                background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
+                background: 'linear-gradient(135deg, #1A237E 0%, #1E40AF 100%)',
                 color: '#fff',
                 border: 'none',
                 fontWeight: '700',
@@ -711,8 +711,8 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
                   key={cat.id}
                   onClick={() => handleToggleCategory(cat.id)}
                   style={{
-                    border: isSelected ? '2px solid #0f766e' : '1px solid #e2e8f0',
-                    background: isSelected ? '#f0fdfa' : '#ffffff',
+                    border: isSelected ? '2px solid #1A237E' : '1px solid #e2e8f0',
+                    background: isSelected ? '#EEF2FF' : '#ffffff',
                     padding: '12px 14px',
                     borderRadius: '10px',
                     cursor: 'pointer',
@@ -723,7 +723,7 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <i className={`fa-solid ${cat.icon}`} style={{ color: isSelected ? '#0f766e' : '#94a3b8', fontSize: '1.1rem' }}></i>
+                    <i className={`fa-solid ${cat.icon}`} style={{ color: isSelected ? '#1A237E' : '#94a3b8', fontSize: '1.1rem' }}></i>
                     <div>
                       <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a' }}>
                         {cat.name}
@@ -862,13 +862,13 @@ export default function SellerVerificationCenter({ onUpdate, isInline = false })
                 width: '100%',
                 padding: '14px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
+                background: 'linear-gradient(135deg, #1A237E 0%, #1E40AF 100%)',
                 color: '#ffffff',
                 border: 'none',
                 fontWeight: '800',
                 fontSize: '1rem',
                 cursor: 'pointer',
-                boxShadow: '0 6px 20px rgba(15, 118, 110, 0.35)'
+                boxShadow: '0 6px 20px rgba(26, 35, 126, 0.35)'
               }}
             >
               Continue to Merchant Dashboard 🚀

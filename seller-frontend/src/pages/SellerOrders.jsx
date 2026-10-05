@@ -663,7 +663,7 @@ export default function SellerOrders() {
                           <button
                             onClick={() => handleOpenChat(o)}
                             style={{
-                              background: '#0F766E',
+                              background: '#1A237E',
                               color: '#FFFFFF',
                               border: 'none',
                               padding: '6px 10px',

@@ -56,7 +56,7 @@ function ProtectedSellerLayout({ children, requireApproval = false }) {
                   href="/verification"
                   style={{
                     display: 'inline-block',
-                    background: '#0f766e',
+                    background: '#1A237E',
                     color: '#ffffff',
                     padding: '12px 24px',
                     borderRadius: '10px',
@@ -133,7 +133,7 @@ function ProtectedSellerLayout({ children, requireApproval = false }) {
               <a
                 href="/helpline"
                 style={{
-                  background: '#0f766e',
+                  background: '#1A237E',
                   color: '#ffffff',
                   padding: '6px 14px',
                   borderRadius: '6px',
