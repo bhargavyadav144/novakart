@@ -34,6 +34,17 @@ const sellerSchema = new mongoose.Schema({
     availableBalance: { type: Number, default: 0 },
     pendingEscrowBalance: { type: Number, default: 0 },
     totalWithdrawn: { type: Number, default: 0 }
+  },
+  isFaceVerified: { type: Boolean, default: false },
+  faceVerificationPhoto: { type: String, default: '' },
+  faceVerifiedAt: { type: Date, default: null },
+  lastWithdrawalDate: { type: Date, default: null },
+  lastBiometricVerification: {
+    verifiedAt: { type: Date, default: null },
+    action: { type: String, default: '' },
+    confidence: { type: Number, default: 0 },
+    biometricType: { type: String, default: '' },
+    token: { type: String, default: '' }
   }
 }, { timestamps: true });
 

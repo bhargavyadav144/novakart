@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import sellerApi, { formatINR } from '../services/sellerApi';
+import SellerBiometricModal from '../components/SellerBiometricModal';
 
 export default function SellerPayouts() {
   const [walletData, setWalletData] = useState(null);
@@ -14,6 +15,14 @@ export default function SellerPayouts() {
     upiId: ''
   });
   const [msg, setMsg] = useState('');
+
+  // Payout Request States
+  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutNotes, setPayoutNotes] = useState('');
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+  const [requestingPayout, setRequestingPayout] = useState(false);
+  const [payoutSuccessData, setPayoutSuccessData] = useState(null);
 
   const fetchWallet = async () => {
     setLoading(true);
@@ -54,8 +63,62 @@ export default function SellerPayouts() {
     }
   };
 
-  const handleRequestPayout = () => {
-    alert('✅ Payout claim submitted to Treasury! After verification of customer delivery confirmation & return period, funds will be released via IMPS with UTR tracking.');
+  const handleOpenPayoutDialog = () => {
+    const available = walletData?.availableForWithdrawal || 0;
+    if (available <= 0) {
+      alert('⚠️ No funds currently available for disbursal. As customer orders are confirmed delivered, funds clear automatically into your disbursal balance.');
+      return;
+    }
+    setPayoutAmount(String(available));
+    setPayoutNotes('Merchant Requested Bank Payout');
+    setIsPayoutModalOpen(true);
+  };
+
+  const handleProceedToBiometrics = (e) => {
+    e.preventDefault();
+    const amt = Number(payoutAmount);
+    const available = walletData?.availableForWithdrawal || 0;
+
+    if (isNaN(amt) || amt < 100) {
+      alert('⚠️ Minimum disbursal amount is ₹100.');
+      return;
+    }
+    if (amt > available) {
+      alert(`⚠️ Cannot withdraw more than available balance of ${formatINR(available)}.`);
+      return;
+    }
+
+    setIsPayoutModalOpen(false);
+    setIsBiometricModalOpen(true);
+  };
+
+  const handleBiometricSuccess = async (biometricResult) => {
+    setRequestingPayout(true);
+    setMsg('');
+    try {
+      const { data } = await sellerApi.post('/sellers/request-payout', {
+        amount: Number(payoutAmount),
+        biometricToken: biometricResult.biometricToken,
+        notes: payoutNotes
+      });
+
+      if (data.success) {
+        setPayoutSuccessData({
+          amount: data.withdrawnAmount,
+          utr: data.utrNumber,
+          bankName: walletData?.bankDetails?.bankName || 'HDFC Bank',
+          accountNumber: walletData?.bankDetails?.accountNumber || '44',
+          biometricType: biometricResult.biometricType
+        });
+        setMsg(`🎉 Payout of ${formatINR(data.withdrawnAmount)} successfully authorized via ${biometricResult.biometricType === 'FINGERPRINT' ? 'Fingerprint Biometric' : 'Face Recognition'}! UTR: ${data.utrNumber}`);
+        setIsBiometricModalOpen(false);
+        fetchWallet();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit payout claim. Please try again.');
+    } finally {
+      setRequestingPayout(false);
+    }
   };
 
   return (
@@ -66,24 +129,75 @@ export default function SellerPayouts() {
             <span style={{ background: '#ECFDF5', color: '#047857', padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '700' }}>
               <i className="fa-solid fa-shield-halved"></i> Escrow Verification Active
             </span>
+            <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '700' }}>
+              <i className="fa-solid fa-fingerprint"></i> Biometric Auth: Fingerprint &amp; Face
+            </span>
           </div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: '#0F172A' }}>
-            Settlements & Merchant Bank Payouts
+            Settlements &amp; Merchant Bank Payouts
           </h1>
           <p style={{ color: '#64748B', fontSize: '0.88rem' }}>
-            Track your product turnover, 10% platform cuts, return-window escrow, and direct bank disbursals
+            Track product turnover, 10% platform cuts, return-window escrow, and fingerprint/face-protected bank disbursals
           </p>
         </div>
 
         <button 
-          onClick={handleRequestPayout}
-          style={{ background: '#10B981', color: '#090D16', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}
+          onClick={handleOpenPayoutDialog}
+          style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: '#FFFFFF', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: '800', fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}
         >
-          <i className="fa-solid fa-paper-plane"></i> Request Disbursal
+          <i className="fa-solid fa-fingerprint"></i> Request Disbursal
         </button>
       </div>
 
-      {msg && (
+      {payoutSuccessData && (
+        <div style={{
+          background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)',
+          border: '1.5px solid #10B981',
+          borderRadius: '12px',
+          padding: '18px 22px',
+          marginBottom: '22px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: '#10B981',
+              color: '#090D16',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem',
+              fontWeight: '900',
+              boxShadow: '0 0 16px rgba(16, 185, 129, 0.5)'
+            }}>
+              ✓
+            </div>
+            <div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#065F46' }}>
+                🎉 Disbursal of {formatINR(payoutSuccessData.amount)} Successfully Authorized!
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#047857', marginTop: '2px' }}>
+                Verified via {payoutSuccessData.biometricType === 'FINGERPRINT' ? '👆 Touch Fingerprint Sensor' : '📷 Face Recognition'}. Funds routed to {payoutSuccessData.bankName} (A/C: ••••{String(payoutSuccessData.accountNumber).slice(-4)}).
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#047857', fontFamily: 'monospace', fontWeight: '700', marginTop: '4px' }}>
+                IMPS UTR: {payoutSuccessData.utr} &bull; Status: Released for Treasury Credit
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setPayoutSuccessData(null)}
+            style={{ background: 'none', border: 'none', color: '#047857', fontSize: '1.4rem', cursor: 'pointer' }}
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
+      {msg && !payoutSuccessData && (
         <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '12px 18px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.9rem', fontWeight: '600' }}>
           {msg}
         </div>
@@ -312,6 +426,207 @@ export default function SellerPayouts() {
           </table>
         </div>
       </div>
+
+      {/* PAYOUT REQUEST DIALOG MODAL */}
+      {isPayoutModalOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            maxWidth: '460px',
+            width: '100%',
+            padding: '24px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setIsPayoutModalOpen(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: '#F1F5F9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                color: '#64748B',
+                fontSize: '1.2rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              &times;
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ECFDF5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                <i className="fa-solid fa-paper-plane"></i>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: '#0F172A' }}>
+                  Request Bank Payout
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748B' }}>
+                  NovaKart IMPS Direct Treasury Disbursal
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleProceedToBiometrics} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Balance card */}
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>Available for Disbursal</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#047857' }}>
+                    {formatINR(walletData?.availableForWithdrawal || 0)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPayoutAmount(String(walletData?.availableForWithdrawal || 0))}
+                  style={{
+                    background: '#ECFDF5',
+                    color: '#047857',
+                    border: '1px solid #A7F3D0',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚡ Full Balance
+                </button>
+              </div>
+
+              {/* Amount input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Payout Amount to Withdraw (₹)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem', fontWeight: '800', color: '#64748B' }}>
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min="100"
+                    max={walletData?.availableForWithdrawal || 0}
+                    value={payoutAmount}
+                    onChange={(e) => setPayoutAmount(e.target.value)}
+                    placeholder="Enter amount (min ₹100)"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px 12px 34px',
+                      fontSize: '1.15rem',
+                      fontWeight: '800',
+                      border: '1.5px solid #CBD5E1',
+                      borderRadius: '10px',
+                      boxSizing: 'border-box',
+                      color: '#0F172A'
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Destination Bank Account */}
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 14px' }}>
+                <div style={{ fontSize: '0.74rem', color: '#1E40AF', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Receiving Bank Account
+                </div>
+                <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#1E3A8A' }}>
+                  🏦 {walletData?.bankDetails?.bankName || 'HDFC Bank'} &bull; A/C: {walletData?.bankDetails?.accountNumber || '50100234891244'}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#3B82F6', marginTop: '2px' }}>
+                  IFSC: {walletData?.bankDetails?.ifscCode || 'HDFC0001234'} &bull; Holder: {walletData?.bankDetails?.accountHolderName || walletData?.storeName}
+                </div>
+              </div>
+
+              {/* Biometric Security Protocol Warning */}
+              <div style={{
+                background: '#FEF3C7',
+                border: '1px solid #FCD34D',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <i className="fa-solid fa-fingerprint" style={{ color: '#D97706', fontSize: '1.2rem' }}></i>
+                <div style={{ fontSize: '0.78rem', color: '#92400E', lineHeight: '1.4' }}>
+                  <strong>Biometric Verification Required:</strong> You will be prompted to authenticate with your <strong>matching fingerprint</strong> or <strong>matching face</strong> before payout is released.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsPayoutModalOpen(false)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    background: '#FFFFFF',
+                    color: '#64748B',
+                    fontWeight: '700',
+                    fontSize: '0.88rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 2,
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: '#FFFFFF',
+                    fontWeight: '800',
+                    fontSize: '0.92rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                  }}
+                >
+                  <i className="fa-solid fa-shield-check"></i> Verify Biometrics &amp; Withdraw
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SELLER BIOMETRIC VERIFICATION MODAL */}
+      <SellerBiometricModal
+        isOpen={isBiometricModalOpen}
+        onClose={() => setIsBiometricModalOpen(false)}
+        onVerifiedSuccess={handleBiometricSuccess}
+        amount={payoutAmount}
+        bankDetails={walletData?.bankDetails}
+        actionContext="CASHOUT_WITHDRAWAL"
+        actionLabel="Merchant Payout Biometric Authorization"
+      />
     </div>
   );
 }

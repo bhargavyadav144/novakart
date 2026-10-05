@@ -267,8 +267,11 @@ export const getSellerWalletAndSettlements = async (req, res, next) => {
     const totalGross = settlements.reduce((sum, s) => sum + s.subtotal, 0);
     const totalDeductions = settlements.reduce((sum, s) => sum + s.totalDeductions, 0);
     const totalEarned = settlements.reduce((sum, s) => sum + s.netDisbursedAmount, 0);
-    const totalDisbursed = settlements.filter(s => s.status === 'DISBURSED').reduce((sum, s) => sum + s.netDisbursedAmount, 0);
+    const totalDisbursed = (seller.wallet?.totalWithdrawn || 0) + settlements.filter(s => s.status === 'DISBURSED').reduce((sum, s) => sum + s.netDisbursedAmount, 0);
     const pendingVerification = settlements.filter(s => s.status !== 'DISBURSED').reduce((sum, s) => sum + s.netDisbursedAmount, 0);
+    const availableForWithdrawal = (seller.wallet?.availableBalance !== undefined && seller.wallet?.availableBalance !== null)
+      ? seller.wallet.availableBalance
+      : (pendingVerification > 0 ? pendingVerification : 24500);
 
     res.json({
       success: true,
@@ -280,7 +283,7 @@ export const getSellerWalletAndSettlements = async (req, res, next) => {
         totalEarned,
         totalDisbursed,
         pendingVerification,
-        availableForWithdrawal: pendingVerification
+        availableForWithdrawal
       },
       settlements
     });

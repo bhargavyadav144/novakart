@@ -84,6 +84,12 @@ export function SellerAuthProvider({ children }) {
     }
   };
 
+  const updateSellerUser = (updates) => {
+    const updated = { ...(sellerUser || {}), ...updates };
+    setSellerUser(updated);
+    localStorage.setItem('novakart_seller_user', JSON.stringify(updated));
+  };
+
   const logout = () => {
     setSellerUser(null);
     setToken(null);
@@ -92,7 +98,7 @@ export function SellerAuthProvider({ children }) {
   };
 
   return (
-    <SellerAuthContext.Provider value={{ sellerUser, token, loading, login, register, logout, liveOrdersAlert }}>
+    <SellerAuthContext.Provider value={{ sellerUser, updateSellerUser, token, loading, login, register, logout, liveOrdersAlert }}>
       {children}
     </SellerAuthContext.Provider>
   );

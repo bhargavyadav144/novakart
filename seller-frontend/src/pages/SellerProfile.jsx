@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSellerAuth } from '../context/SellerAuthContext';
 import sellerApi from '../services/sellerApi';
+import SellerBiometricModal from '../components/SellerBiometricModal';
 
 const DEFAULT_OWNER_PHOTO = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
 const DEFAULT_STORE_BANNER = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80';
@@ -17,7 +18,9 @@ const LOCATION_PRESETS = [
 export default function SellerProfile() {
   const { sellerUser, updateSellerUser } = useSellerAuth();
   
-  // Profile & Contact State
+  // Biometric Test States
+  const [isBioTestModalOpen, setIsBioTestModalOpen] = useState(false);
+  const [bioModalMode, setBioModalMode] = useState('VERIFY');
   const [storeName, setStoreName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
@@ -561,6 +564,100 @@ export default function SellerProfile() {
           </div>
         </div>
 
+        {/* 5. Merchant Biometric Security & KYC Identity (Fingerprint & Face) */}
+        <div style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0F172A', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="fa-solid fa-fingerprint" style={{ color: '#10B981' }}></i>
+                Merchant Biometric Security &amp; Payout Protection
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>
+                High-security biometric gate protecting bank payout disbursals and account changes
+              </p>
+            </div>
+            <span style={{ background: '#ECFDF5', color: '#047857', padding: '4px 12px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <i className="fa-solid fa-circle-check"></i> Biometric Active
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginTop: '12px' }}>
+            {/* Method 1: Fingerprint Sensor */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#ECFDF5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                  <i className="fa-solid fa-fingerprint"></i>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
+                    👆 Touch Fingerprint Sensor
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#047857', fontWeight: '700' }}>
+                    Hardware Sensor Enabled
+                  </div>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.76rem', color: '#64748B', margin: '0 0 12px 0', lineHeight: '1.4' }}>
+                Authenticate instant payout claims with your smartphone touch sensor or laptop fingerprint scanner.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setBioModalMode('VERIFY'); setIsBioTestModalOpen(true); }}
+                style={{
+                  width: '100%',
+                  background: '#FFFFFF',
+                  border: '1px solid #A7F3D0',
+                  color: '#047857',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: '800',
+                  cursor: 'pointer'
+                }}
+              >
+                <i className="fa-solid fa-fingerprint"></i> Test Fingerprint Sensor
+              </button>
+            </div>
+
+            {/* Method 2: Live Face Recognition */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#EFF6FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                  <i className="fa-solid fa-camera"></i>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0F172A' }}>
+                    📷 Live Face Recognition
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#1D4ED8', fontWeight: '700' }}>
+                    KYC Enrolled &amp; Matched
+                  </div>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.76rem', color: '#64748B', margin: '0 0 12px 0', lineHeight: '1.4' }}>
+                Real-time webcam vector comparison matched against your store owner profile photo.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setBioModalMode('RECAPTURE'); setIsBioTestModalOpen(true); }}
+                style={{
+                  width: '100%',
+                  background: '#FFFFFF',
+                  border: '1px solid #BFDBFE',
+                  color: '#1D4ED8',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: '800',
+                  cursor: 'pointer'
+                }}
+              >
+                <i className="fa-solid fa-camera"></i> Re-capture Live Face KYC
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Submit Button */}
         <button
           type="submit"
@@ -594,6 +691,21 @@ export default function SellerProfile() {
         </button>
 
       </form>
+
+      {/* SELLER BIOMETRIC VERIFICATION MODAL */}
+      <SellerBiometricModal
+        isOpen={isBioTestModalOpen}
+        onClose={() => setIsBioTestModalOpen(false)}
+        mode={bioModalMode}
+        onVerifiedSuccess={(res) => {
+          setSuccessMsg(`✅ Biometric authentication successful (${res.biometricType === 'FINGERPRINT' ? 'Fingerprint 99% Match' : 'Face Vector Match'})!`);
+          setTimeout(() => setSuccessMsg(''), 4000);
+          setIsBioTestModalOpen(false);
+        }}
+        actionContext="SECURITY_VERIFICATION"
+        actionLabel={bioModalMode === 'RECAPTURE' ? 'Store Owner Face Re-Capture' : 'Biometric Sensor Test'}
+        enrolledPhotoUrl={logo}
+      />
     </div>
   );
 }

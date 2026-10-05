@@ -49,7 +49,7 @@ async function pushToGitHub() {
           name: 'bhargavyadav144',
           email: 'bhargavyadav144@users.noreply.github.com'
         },
-        message: 'Implement live real camera streaming HUD, biometric face verification gate for bank details & withdrawals, and password authorization for face re-capture'
+        message: 'feat(seller): add fingerprint and face biometric verification for payment requests, settlement disbursals and security settings'
       });
       console.log('🎉 New commit created:', sha);
     } catch {
