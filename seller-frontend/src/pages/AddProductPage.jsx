@@ -11,7 +11,8 @@ export default function AddProductPage() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Electronics & Gadgets');
+  const [category, setCategory] = useState('');
+  const [approvedCategories, setApprovedCategories] = useState([]);
   const [brand, setBrand] = useState('NovaTech Audio');
   const [price, setPrice] = useState('');
   const [oldPrice, setOldPrice] = useState('');
@@ -28,6 +29,20 @@ export default function AddProductPage() {
   const [videoUrlInput, setVideoUrlInput] = useState('');
 
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    sellerApi.get('/sellers/profile')
+      .then(({ data }) => {
+        const cats = data.seller?.approvedProductCategories || [];
+        setApprovedCategories(cats);
+        if (cats.length > 0) {
+          setCategory(cats[0]);
+        } else {
+          setCategory('Electronics');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Handle Photo File Upload (up to 10)
   const handlePhotoFiles = (e) => {
@@ -213,13 +228,29 @@ export default function AddProductPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
-              <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>Category</label>
-              <select className="form-input" value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="Electronics & Gadgets">Electronics &amp; Gadgets</option>
-                <option value="Fashion & Apparel">Fashion &amp; Apparel</option>
-                <option value="Home & Office">Home &amp; Office</option>
-                <option value="Beauty & Care">Beauty &amp; Care</option>
-                <option value="Sports & Fitness">Sports &amp; Fitness</option>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700' }}>Admin Approved Category *</label>
+                {approvedCategories.length === 0 && (
+                  <span style={{ fontSize: '0.72rem', color: '#d97706', fontWeight: '700' }}>
+                    <i className="fa-solid fa-triangle-exclamation"></i> Clearance Pending
+                  </span>
+                )}
+              </div>
+              <select className="form-input" value={category} onChange={(e) => setCategory(e.target.value)} required>
+                {approvedCategories.length > 0 ? (
+                  approvedCategories.map(c => (
+                    <option key={c} value={c}>{c} (Admin Cleared)</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Groceries">Groceries</option>
+                    <option value="Fashion">Fashion</option>
+                    <option value="Home & Kitchen">Home &amp; Kitchen</option>
+                    <option value="Beauty & Health">Beauty &amp; Health</option>
+                    <option value="Sports & Fitness">Sports &amp; Fitness</option>
+                  </>
+                )}
               </select>
             </div>
             <div>

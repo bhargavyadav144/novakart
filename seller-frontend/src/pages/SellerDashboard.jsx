@@ -11,16 +11,23 @@ export default function SellerDashboard() {
   const { sellerUser } = useSellerAuth();
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [verificationProgress, setVerificationProgress] = useState(100);
   const [loading, setLoading] = useState(true);
   const [selectedLabelOrder, setSelectedLabelOrder] = useState(null);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
   const [selectedDetailOrder, setSelectedDetailOrder] = useState(null);
 
   const fetchDashboard = () => {
-    sellerApi.get('/sellers/dashboard-stats')
-      .then(({ data }) => {
-        setStats(data.stats);
-        setOrders(data.recentOrders || []);
+    Promise.all([
+      sellerApi.get('/sellers/dashboard-stats'),
+      sellerApi.get('/sellers/profile').catch(() => ({ data: {} }))
+    ])
+      .then(([statsRes, profileRes]) => {
+        setStats(statsRes.data.stats);
+        setOrders(statsRes.data.recentOrders || []);
+        if (profileRes.data?.verificationProgress !== undefined) {
+          setVerificationProgress(profileRes.data.verificationProgress);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -44,6 +51,87 @@ export default function SellerDashboard() {
 
   return (
     <div>
+      {/* DYNAMIC PROGRESS TRACKING BANNER (Only displayed until 100% complete) */}
+      {verificationProgress < 100 && (
+        <div style={{
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+          color: '#ffffff',
+          borderRadius: '14px',
+          padding: '20px 24px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.15)',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}>
+          <div style={{ flex: 1, minWidth: '280px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+              <span style={{
+                background: '#f59e0b',
+                color: '#000',
+                padding: '3px 10px',
+                borderRadius: '12px',
+                fontSize: '0.72rem',
+                fontWeight: '800'
+              }}>
+                KYC INCOMPLETE: {verificationProgress}%
+              </span>
+              <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                Admin clearance requires 100% completion
+              </span>
+            </div>
+
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: '800' }}>
+              Action Required: Complete Merchant Verification ({verificationProgress}%)
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: '#cbd5e1' }}>
+              Submit your store premises photo, dual face &amp; fingerprint biometrics, government ID, and product categories to activate customer storefront visibility.
+            </p>
+
+            {/* Dynamic Progress Bar */}
+            <div style={{
+              width: '100%',
+              maxWidth: '480px',
+              height: '8px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              marginTop: '12px'
+            }}>
+              <div style={{
+                width: `${verificationProgress}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #10B981 0%, #34D399 100%)',
+                transition: 'width 0.4s ease'
+              }}></div>
+            </div>
+          </div>
+
+          <div>
+            <Link
+              to="/verification"
+              style={{
+                background: '#10B981',
+                color: '#ffffff',
+                padding: '12px 20px',
+                borderRadius: '10px',
+                fontWeight: '800',
+                fontSize: '0.88rem',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
+              }}
+            >
+              <i className="fa-solid fa-shield-halved"></i> Complete Verification ({verificationProgress}%) &rarr;
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="seller-top-header">
         <div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: '800' }}>Store Dashboard</h1>

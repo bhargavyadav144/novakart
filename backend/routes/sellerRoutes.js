@@ -7,6 +7,7 @@ import {
   authorizeSellerFaceChange,
   enrollSellerFace,
   enrollSellerBiometrics,
+  updateVerificationStage,
   requestSellerPayout
 } from '../controllers/sellerController.js';
 import { authenticateUser } from '../middleware/authMiddleware.js';
@@ -21,11 +22,12 @@ router.get('/dashboard-stats', getSellerDashboardStats);
 router.get('/profile', getSellerProfile);
 router.put('/profile', updateSellerProfile);
 
-// Biometric & Payout Disbursals
+// Verification, Biometrics & Payout Disbursals
 router.post('/verify-biometric', verifySellerBiometric);
 router.post('/authorize-face-change', authorizeSellerFaceChange);
 router.post('/enroll-face', enrollSellerFace);
 router.post('/enroll-biometrics', enrollSellerBiometrics);
+router.post('/update-verification-stage', updateVerificationStage);
 router.post('/request-payout', requestSellerPayout);
 
 export default router;

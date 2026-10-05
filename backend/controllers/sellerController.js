@@ -47,10 +47,88 @@ export const getSellerDashboardStats = async (req, res, next) => {
 // @desc    Get Full Seller Profile
 // @route   GET /api/sellers/profile
 // @access  Private (Seller)
+// @desc    Dynamic Modular Verification Progress Calculation
+// Easily extensible: if new verification checks are added in the future,
+// simply add a new rule object with its weight and check function.
+export const calculateVerificationProgress = (seller) => {
+  const stages = {
+    storeDetails: {
+      key: 'storeDetails',
+      title: 'Store & Owner Identity',
+      description: 'Business name, owner contact details, physical address, and store type.',
+      weight: 15,
+      completed: Boolean(seller.storeName && seller.ownerName && seller.businessAddress && seller.storeType)
+    },
+    storePremises: {
+      key: 'storePremises',
+      title: 'Store Premises & Facade Proof',
+      description: seller.storeType === 'home_business' ? 'Home office / production declaration proof.' : 'Physical store facade / signboard photo.',
+      weight: 15,
+      completed: Boolean(seller.storePhoto || (seller.storeType === 'home_business' && (seller.homeBusinessDeclaration || seller.businessAddress)))
+    },
+    biometrics: {
+      key: 'biometrics',
+      title: 'Biometric KYC Security',
+      description: 'Dual face scans (Frontal & Angle) + up to 3 touch fingerprints.',
+      weight: 20,
+      completed: Boolean(seller.isBiometricEnrolled && (seller.enrolledFaces?.length || 0) >= 2 && (seller.enrolledFingerprints?.length || 0) >= 1)
+    },
+    governmentId: {
+      key: 'governmentId',
+      title: 'Government Identity Proof',
+      description: 'Aadhaar Card, Voter ID, or Passport verification.',
+      weight: 15,
+      completed: Boolean(seller.governmentId?.idNumber && (seller.governmentId?.documentImage || seller.governmentId?.isVerified))
+    },
+    taxDetails: {
+      key: 'taxDetails',
+      title: 'Tax & Business Registration',
+      description: 'Business PAN Card, GSTIN registration, or Trade Certificate.',
+      weight: 15,
+      completed: Boolean(seller.taxDetails?.panNumber || seller.taxDetails?.gstin || seller.taxDetails?.businessRegistrationNumber)
+    },
+    bankAccount: {
+      key: 'bankAccount',
+      title: 'Bank Settlement & Payout Routing',
+      description: 'Verified Bank Account Number and IFSC Code for IMPS earnings transfers.',
+      weight: 10,
+      completed: Boolean(seller.bankDetails?.accountNumber && seller.bankDetails?.ifscCode)
+    },
+    productCategories: {
+      key: 'productCategories',
+      title: 'Product Categories Declaration',
+      description: 'Declaration of product categories (e.g. Electronics, Groceries, Apparel) for admin clearance.',
+      weight: 10,
+      completed: Boolean((seller.requestedProductCategories?.length || 0) > 0 || (seller.approvedProductCategories?.length || 0) > 0)
+    }
+  };
+
+  const totalProgress = Object.values(stages).reduce((sum, stage) => sum + (stage.completed ? stage.weight : 0), 0);
+  const normalizedProgress = Math.min(100, Math.round(totalProgress));
+
+  return {
+    progress: normalizedProgress,
+    stages,
+    isComplete: normalizedProgress === 100
+  };
+};
+
+// @desc    Get Full Seller Profile with Dynamic Verification Progress
+// @route   GET /api/sellers/profile
+// @access  Private (Seller)
 export const getSellerProfile = async (req, res, next) => {
   try {
     const seller = await Seller.findOne({ userId: req.user._id });
     if (!seller) return res.status(404).json({ success: false, message: 'Seller profile not found.' });
+
+    const { progress, stages, isComplete } = calculateVerificationProgress(seller);
+    if (seller.verificationProgress !== progress) {
+      seller.verificationProgress = progress;
+      if (isComplete && seller.verificationStatus !== 'approved') {
+        seller.verificationStatus = 'under_review';
+      }
+      await seller.save();
+    }
 
     const enrolledFacesCount = seller.enrolledFaces?.length || 0;
     const enrolledFingerprintsCount = seller.enrolledFingerprints?.length || 0;
@@ -60,6 +138,9 @@ export const getSellerProfile = async (req, res, next) => {
     res.json({
       success: true,
       seller,
+      verificationProgress: progress,
+      verificationStages: stages,
+      isVerificationComplete: isComplete,
       isBiometricEnrolled,
       biometricSetupRequired,
       enrolledFacesCount,
@@ -293,14 +374,85 @@ export const enrollSellerBiometrics = async (req, res, next) => {
     seller.isBiometricEnrolled = true;
     seller.biometricsEnrolledAt = new Date();
 
+    // Recalculate dynamic verification progress
+    const { progress, stages, isComplete } = calculateVerificationProgress(seller);
+    seller.verificationProgress = progress;
+    if (isComplete && seller.verificationStatus !== 'approved') {
+      seller.verificationStatus = 'under_review';
+    }
+
     await seller.save();
 
     res.json({
       success: true,
       message: '✅ Biometric Security Setup Completed! 2 Face scans and registered fingerprints saved successfully.',
       isBiometricEnrolled: true,
+      verificationProgress: progress,
+      stages,
+      isComplete,
       enrolledFaces: seller.enrolledFaces,
       enrolledFingerprints: seller.enrolledFingerprints,
+      seller
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update Modular Verification Stage & Recalculate Progress
+// @route   POST /api/sellers/update-verification-stage
+// @access  Private (Seller)
+export const updateVerificationStage = async (req, res, next) => {
+  try {
+    const { stage, data: stageData } = req.body;
+    const seller = await Seller.findOne({ userId: req.user._id });
+    if (!seller) return res.status(404).json({ success: false, message: 'Seller profile not found.' });
+
+    if (stage === 'store_premises') {
+      if (stageData.storePhoto) seller.storePhoto = stageData.storePhoto;
+      if (stageData.storeType) seller.storeType = stageData.storeType;
+      if (stageData.homeBusinessDeclaration) seller.homeBusinessDeclaration = stageData.homeBusinessDeclaration;
+      if (stageData.businessAddress) seller.businessAddress = stageData.businessAddress;
+    } else if (stage === 'government_id') {
+      if (!seller.governmentId) seller.governmentId = {};
+      if (stageData.idType) seller.governmentId.idType = stageData.idType;
+      if (stageData.idNumber) seller.governmentId.idNumber = stageData.idNumber;
+      if (stageData.documentImage) seller.governmentId.documentImage = stageData.documentImage;
+      seller.governmentId.submittedAt = new Date();
+    } else if (stage === 'tax_details') {
+      if (!seller.taxDetails) seller.taxDetails = {};
+      if (stageData.panNumber) seller.taxDetails.panNumber = stageData.panNumber;
+      if (stageData.panCardImage) seller.taxDetails.panCardImage = stageData.panCardImage;
+      if (stageData.gstin) seller.taxDetails.gstin = stageData.gstin;
+      if (stageData.businessRegistrationNumber) seller.taxDetails.businessRegistrationNumber = stageData.businessRegistrationNumber;
+      seller.taxDetails.submittedAt = new Date();
+    } else if (stage === 'bank_account') {
+      if (!seller.bankDetails) seller.bankDetails = {};
+      if (stageData.accountHolderName) seller.bankDetails.accountHolderName = stageData.accountHolderName;
+      if (stageData.bankName) seller.bankDetails.bankName = stageData.bankName;
+      if (stageData.accountNumber) seller.bankDetails.accountNumber = stageData.accountNumber;
+      if (stageData.ifscCode) seller.bankDetails.ifscCode = stageData.ifscCode;
+      if (stageData.upiId !== undefined) seller.bankDetails.upiId = stageData.upiId;
+    } else if (stage === 'product_categories') {
+      if (Array.isArray(stageData.requestedProductCategories)) {
+        seller.requestedProductCategories = stageData.requestedProductCategories;
+      }
+    }
+
+    const { progress, stages, isComplete } = calculateVerificationProgress(seller);
+    seller.verificationProgress = progress;
+    if (isComplete && seller.verificationStatus !== 'approved') {
+      seller.verificationStatus = 'under_review';
+    }
+
+    await seller.save();
+
+    res.json({
+      success: true,
+      message: `✅ Verification stage '${stage.replace('_', ' ')}' updated successfully!`,
+      verificationProgress: progress,
+      stages,
+      isComplete,
       seller
     });
   } catch (error) {

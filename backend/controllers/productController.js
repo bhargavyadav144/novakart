@@ -99,6 +99,25 @@ export const createSellerProduct = async (req, res, next) => {
       });
     }
 
+    // Verify Admin Category Clearance
+    const approvedCats = seller.approvedProductCategories || [];
+    if (approvedCats.length > 0) {
+      const isApprovedCategory = approvedCats.some(
+        c => c.toLowerCase().trim() === (category || '').toLowerCase().trim()
+      );
+      if (!isApprovedCategory) {
+        return res.status(403).json({
+          success: false,
+          message: `Category "${category}" has not been cleared by the Administrator for your store yet. Approved categories: ${approvedCats.join(', ')}. Please select an approved category or request clearance in the Verification Center.`
+        });
+      }
+    } else if (seller.requestedProductCategories && seller.requestedProductCategories.length > 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your requested product categories are currently under Admin review. Products can be listed once Admin approves your categories.'
+      });
+    }
+
     const { name, description, category, brand, price, oldPrice, stock, images, videos, weight } = req.body;
 
     const discountStr = oldPrice && Number(oldPrice) > Number(price)

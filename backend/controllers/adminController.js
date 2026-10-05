@@ -6,6 +6,7 @@ import { Order } from '../models/Order.js';
 import { emitToUser } from '../services/socketService.js';
 import { ROLES, ACCOUNT_STATUSES, ORDER_STATUSES } from '../config/constants.js';
 import { createNotification } from './notificationController.js';
+import { calculateVerificationProgress } from './sellerController.js';
 
 // @desc    Admin Master Statistics Overview
 // @route   GET /api/admin/dashboard-stats
@@ -301,23 +302,64 @@ export const approveSeller = async (req, res, next) => {
 
     seller.status = ACCOUNT_STATUSES.APPROVED;
     seller.isApproved = true;
+    seller.verificationStatus = 'approved';
+
+    // Approve requested product categories or specified categories
+    if (req.body.approvedCategories && Array.isArray(req.body.approvedCategories)) {
+      seller.approvedProductCategories = req.body.approvedCategories;
+    } else if ((!seller.approvedProductCategories || seller.approvedProductCategories.length === 0) && seller.requestedProductCategories?.length > 0) {
+      seller.approvedProductCategories = seller.requestedProductCategories;
+    }
+
+    // Mark documents as verified upon admin approval
+    if (seller.governmentId) {
+      seller.governmentId.isVerified = true;
+    }
+    if (seller.taxDetails) {
+      seller.taxDetails.isVerified = true;
+    }
+
+    const { progress } = calculateVerificationProgress(seller);
+    seller.verificationProgress = progress;
     await seller.save();
 
     emitToUser(seller.userId, 'account_status_approved', {
-      message: 'Congratulations! Your seller store has been approved by admin. You can now add and list products.'
+      message: `Congratulations! Your seller store '${seller.storeName}' has been approved by admin. Approved categories: ${seller.approvedProductCategories.join(', ')}.`
     });
 
     // Persistent in-app notification
     createNotification({
       recipientId: seller.userId,
       role: 'seller',
-      title: '🎉 Store Approved!',
-      message: `Your store "${seller.storeName}" has been approved. Start adding products and earning!`,
+      title: '🎉 Store & Product Categories Approved!',
+      message: `Your store "${seller.storeName}" has been approved with categories: ${seller.approvedProductCategories.join(', ')}. Start listing products!`,
       type: 'SELLER_APPROVAL',
       link: '/',
     });
 
     res.json({ success: true, message: `Seller store '${seller.storeName}' approved.`, seller });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateSellerCategories = async (req, res, next) => {
+  try {
+    const seller = await Seller.findById(req.params.id);
+    if (!seller) return res.status(404).json({ success: false, message: 'Seller not found' });
+
+    const { approvedCategories } = req.body;
+    seller.approvedProductCategories = Array.isArray(approvedCategories) ? approvedCategories : [];
+    const { progress } = calculateVerificationProgress(seller);
+    seller.verificationProgress = progress;
+    await seller.save();
+
+    res.json({
+      success: true,
+      message: `Approved product categories updated for '${seller.storeName}'.`,
+      approvedCategories: seller.approvedProductCategories,
+      seller
+    });
   } catch (error) {
     next(error);
   }

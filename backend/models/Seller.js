@@ -58,6 +58,40 @@ const sellerSchema = new mongoose.Schema({
   ],
   isBiometricEnrolled: { type: Boolean, default: false },
   biometricsEnrolledAt: { type: Date, default: null },
+  
+  // Store Type & Premises Verification
+  storeType: { type: String, enum: ['retail_store', 'home_business'], default: 'retail_store' },
+  storePhoto: { type: String, default: '' },
+  homeBusinessDeclaration: { type: String, default: '' },
+
+  // Government ID KYC Verification
+  governmentId: {
+    idType: { type: String, enum: ['aadhaar', 'voter_id', 'passport'], default: 'aadhaar' },
+    idNumber: { type: String, default: '' },
+    documentImage: { type: String, default: '' },
+    isVerified: { type: Boolean, default: false },
+    submittedAt: { type: Date, default: null }
+  },
+
+  // Tax & Business Identity Compliance
+  taxDetails: {
+    panNumber: { type: String, default: '' },
+    panCardImage: { type: String, default: '' },
+    gstin: { type: String, default: '' },
+    businessRegistrationNumber: { type: String, default: '' },
+    isVerified: { type: Boolean, default: false },
+    submittedAt: { type: Date, default: null }
+  },
+
+  // Product Categories Clearance
+  requestedProductCategories: [{ type: String }],
+  approvedProductCategories: [{ type: String }],
+
+  // Dynamic Verification Progress Tracking (0 - 100%)
+  verificationProgress: { type: Number, default: 0 },
+  verificationStatus: { type: String, enum: ['incomplete', 'under_review', 'approved', 'rejected'], default: 'incomplete' },
+  isVerificationCelebrated: { type: Boolean, default: false },
+
   lastWithdrawalDate: { type: Date, default: null },
   lastBiometricVerification: {
     verifiedAt: { type: Date, default: null },

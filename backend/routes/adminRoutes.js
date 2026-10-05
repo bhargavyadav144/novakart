@@ -3,6 +3,7 @@ import {
   getAdminDashboardStats,
   getAllSellers,
   approveSeller,
+  updateSellerCategories,
   rejectSeller,
   toggleBlockSeller,
   getAllDeliveryAgents,
@@ -26,9 +27,10 @@ router.use(authenticateUser, authorizeRoles(ROLES.ADMIN));
 
 router.get('/dashboard-stats', getAdminDashboardStats);
 
-// Seller Moderation
+// Seller Moderation & Category Clearance
 router.get('/sellers', getAllSellers);
 router.put('/sellers/:id/approve', approveSeller);
+router.put('/sellers/:id/categories', updateSellerCategories);
 router.put('/sellers/:id/reject', rejectSeller);
 router.put('/sellers/:id/block', toggleBlockSeller);
 

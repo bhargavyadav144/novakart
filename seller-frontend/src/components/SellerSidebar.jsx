@@ -23,10 +23,11 @@ export default function SellerSidebar() {
 
       <nav className="seller-nav">
         <NavLink to="/" end><i className="fa-solid fa-chart-line"></i> Dashboard</NavLink>
+        <NavLink to="/verification"><i className="fa-solid fa-shield-halved"></i> Verification Hub</NavLink>
         <NavLink to="/products"><i className="fa-solid fa-boxes-stacked"></i> Products Inventory</NavLink>
         <NavLink to="/products/new"><i className="fa-solid fa-circle-plus"></i> Add New Product</NavLink>
         <NavLink to="/orders"><i className="fa-solid fa-receipt"></i> Store Orders</NavLink>
-        <NavLink to="/payouts"><i className="fa-solid fa-building-columns"></i> Settlements & Payouts</NavLink>
+        <NavLink to="/payouts"><i className="fa-solid fa-building-columns"></i> Settlements &amp; Payouts</NavLink>
         <NavLink to="/profile"><i className="fa-solid fa-shop"></i> Store Settings</NavLink>
         <a href="http://localhost:3000" target="_blank" rel="noreferrer"><i className="fa-solid fa-arrow-up-right-from-square"></i> Customer Store</a>
       </nav>

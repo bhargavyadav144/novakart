@@ -1,741 +1,427 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSellerAuth } from '../context/SellerAuthContext';
 
 export default function SellerRegister() {
-  const [step, setStep] = useState(1); // 1 = Details, 2 = Mandatory Biometrics
+  const [currentStep, setCurrentStep] = useState(1); // 1 = Store & Owner, 2 = Contact & Location, 3 = Security & Confirm
 
-  // Step 1: Store & Owner Details
-  const [storeName, setStoreName] = useState('');
+  // Step 1: Store & Owner
   const [ownerName, setOwnerName] = useState('');
+  const [storeName, setStoreName] = useState('');
+  const [storeType, setStoreType] = useState('retail_store'); // 'retail_store' | 'home_business'
+
+  // Step 2: Contact & Location
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
-  const [lat, setLat] = useState('28.6139');
-  const [lng, setLng] = useState('77.2090');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [city, setCity] = useState('Guntur');
+  const [postalCode, setPostalCode] = useState('522002');
+  const [lat, setLat] = useState('16.3067');
+  const [lng, setLng] = useState('80.4365');
+
+  // Step 3: Security & Confirm
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
 
-  // Step 2: Mandatory Biometrics (2 Faces, up to 3 Fingerprints)
-  const [faces, setFaces] = useState([
-    { id: 'face-1', label: 'Face 1: Frontal KYC Face Scan', photo: null },
-    { id: 'face-2', label: 'Face 2: Angle / Tilt KYC Face Scan', photo: null }
-  ]);
-  const [activeFaceIndex, setActiveFaceIndex] = useState(0);
-
-  const [fingerprints, setFingerprints] = useState([
-    { id: 'fp-1', name: 'Fingerprint 1', fingerType: 'Right Thumb (Primary)', enrolled: false },
-    { id: 'fp-2', name: 'Fingerprint 2', fingerType: 'Right Index', enrolled: false },
-    { id: 'fp-3', name: 'Fingerprint 3', fingerType: 'Left Thumb', enrolled: false }
-  ]);
-  const [scanningFpIndex, setScanningFpIndex] = useState(null);
-  const [fpScanProgress, setFpScanProgress] = useState(0);
-
-  // Live Camera
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const [streamActive, setStreamActive] = useState(false);
-  const [cameraLoading, setCameraLoading] = useState(false);
-  const [cameraError, setCameraError] = useState('');
-
+  const [errorMsg, setErrorMsg] = useState('');
   const { register, loading } = useSellerAuth();
   const navigate = useNavigate();
 
-  // Camera Management
-  const startCamera = useCallback(async () => {
-    setCameraError('');
-    setCameraLoading(true);
-    try {
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-        audio: false
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play();
-          setStreamActive(true);
-          setCameraLoading(false);
-        };
-      }
-    } catch (err) {
-      console.warn('Webcam stream error:', err);
-      setCameraError('Camera access unavailable. You can use standard verification capture.');
-      setStreamActive(false);
-      setCameraLoading(false);
-    }
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-      videoRef.current.srcObject = null;
-    }
-    setStreamActive(false);
-  }, []);
-
-  useEffect(() => {
-    if (step === 2) {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => stopCamera();
-  }, [step, startCamera, stopCamera]);
-
-  // Capture Face Snapshot
-  const captureFace = (index) => {
-    let photoData = null;
-    if (videoRef.current && canvasRef.current && streamActive) {
-      const v = videoRef.current;
-      const c = canvasRef.current;
-      c.width = v.videoWidth || 640;
-      c.height = v.videoHeight || 480;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(v, 0, 0, c.width, c.height);
-      photoData = c.toDataURL('image/jpeg', 0.85);
-    } else {
-      // Fallback synthetic KYC canvas
-      const c = document.createElement('canvas');
-      c.width = 400;
-      c.height = 400;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = index === 0 ? '#0f172a' : '#1e293b';
-      ctx.fillRect(0, 0, 400, 400);
-      ctx.fillStyle = '#10B981';
-      ctx.beginPath();
-      ctx.arc(200, 150, 60, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(200, 310, 100, Math.PI, 0, false);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 15px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(index === 0 ? 'Face 1 (Frontal KYC)' : 'Face 2 (Angle/Tilt KYC)', 200, 360);
-      photoData = c.toDataURL('image/jpeg', 0.85);
-    }
-
-    setFaces(prev => {
-      const next = [...prev];
-      next[index] = {
-        ...next[index],
-        photo: photoData,
-        capturedAt: new Date().toISOString()
-      };
-      return next;
-    });
-
-    if (index === 0 && !faces[1]?.photo) {
-      setActiveFaceIndex(1);
-    }
-  };
-
-  // Fingerprint Scan Simulation / WebAuthn
-  const handleScanFingerprint = async (index) => {
-    setScanningFpIndex(index);
-    setFpScanProgress(0);
-
-    // Attempt hardware WebAuthn
-    if (window.PublicKeyCredential) {
-      try {
-        const challenge = new Uint8Array(32);
-        window.crypto.getRandomValues(challenge);
-        await navigator.credentials.get({
-          publicKey: { challenge, timeout: 4000, userVerification: 'preferred' }
-        });
-      } catch {
-        /* Fallback to sensor simulation */
-      }
-    }
-
-    const interval = setInterval(() => {
-      setFpScanProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setFingerprints(cur => {
-            const next = [...cur];
-            next[index] = {
-              ...next[index],
-              enrolled: true,
-              enrolledAt: new Date().toISOString(),
-              credentialId: `fp-reg-${Date.now()}-${index}`
-            };
-            return next;
-          });
-          setScanningFpIndex(null);
-          setFpScanProgress(0);
-          return 0;
-        }
-        return prev + 25;
-      });
-    }, 160);
-  };
-
-  const facesCount = faces.filter(f => f.photo).length;
-  const fingerprintsCount = fingerprints.filter(f => f.enrolled).length;
-  const biometricsComplete = facesCount === 2 && fingerprintsCount >= 1;
-
-  // Advance to Step 2
-  const handleProceedToBiometrics = (e) => {
+  const handleStep1Next = (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (!acceptedTerms) {
-      setErrorMsg('You must accept the Merchant Terms & Conditions.');
+    if (!ownerName.trim() || !storeName.trim()) {
+      setErrorMsg('Please enter both owner name and store name.');
       return;
     }
-    if (!storeName || !ownerName || !email || !phone || !password || !businessAddress) {
-      setErrorMsg('Please fill in all store and owner contact details.');
-      return;
-    }
-    setStep(2);
+    setCurrentStep(2);
   };
 
-  // Final Submit
+  const handleStep2Next = (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    if (!email.trim() || !phone.trim() || !businessAddress.trim()) {
+      setErrorMsg('Please enter your email, contact phone, and business address.');
+      return;
+    }
+    setCurrentStep(3);
+  };
+
   const handleFinalSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!biometricsComplete) {
-      setErrorMsg('🔒 Mandatory Biometric Requirement: You must register 2 face scans and at least 1 fingerprint (up to 3 supported).');
+    if (!password || password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMsg('Passwords do not match.');
+      return;
+    }
+    if (!acceptedTerms) {
+      setErrorMsg('Please accept the Merchant Agreement & Verification Terms to proceed.');
       return;
     }
 
-    const payload = {
-      storeName,
-      ownerName,
-      email,
-      phone,
+    const res = await register({
+      storeName: storeName.trim(),
+      ownerName: ownerName.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
       password,
-      businessAddress,
+      storeType,
+      businessAddress: `${businessAddress.trim()}, ${city.trim()} - ${postalCode.trim()}`,
       lat,
       lng,
-      acceptedTerms,
-      enrolledFaces: faces.map(f => ({
-        id: f.id,
-        label: f.label,
-        photo: f.photo
-      })),
-      enrolledFingerprints: fingerprints.filter(f => f.enrolled).map(fp => ({
-        id: fp.id,
-        name: fp.name,
-        fingerType: fp.fingerType,
-        credentialId: fp.credentialId
-      }))
-    };
-
-    const res = await register(payload);
+      acceptedTerms
+    });
 
     if (res.success) {
-      alert('🎉 Seller store registered successfully with biometric verification! Awaiting administrator KYC approval.');
+      // Direct merchant to the onboarding verification dashboard
       navigate('/');
     } else {
       setErrorMsg(res.message);
     }
   };
 
+  const inputStyle = {
+    width: '100%',
+    padding: '11px 14px',
+    border: '1.5px solid var(--seller-border, #e2e8f0)',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit'
+  };
+
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--seller-bg)', padding: '40px 16px' }}>
-      <div style={{
-        background: '#fff',
-        border: '1px solid var(--seller-border)',
-        borderRadius: '16px',
-        padding: '36px',
-        width: '100%',
-        maxWidth: step === 2 ? '640px' : '520px',
-        boxShadow: 'var(--shadow-md)',
-        transition: 'max-width 0.3s'
-      }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--seller-bg, #f8fafc)', padding: '32px 16px' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--seller-border, #e2e8f0)', borderRadius: '16px', padding: '36px', width: '100%', maxWidth: '520px', boxShadow: 'var(--shadow-md, 0 4px 12px rgba(0,0,0,0.05))' }}>
+        
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--seller-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            <i className="fa-solid fa-store" style={{ color: 'var(--seller-accent)' }}></i> Merchant Onboarding
-          </h1>
-          <p style={{ fontSize: '0.85rem', color: '#64748B' }}>
-            {step === 1 ? 'Step 1 of 2: Store & Warehouse Profile Details' : 'Step 2 of 2: Mandatory Biometric Security Setup'}
-          </p>
-
-          {/* Stepper Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '6px 14px', borderRadius: '20px',
-              background: step === 1 ? '#0f766e' : '#dcfce7',
-              color: step === 1 ? '#fff' : '#15803d',
-              fontSize: '0.78rem', fontWeight: '700'
-            }}>
-              <span>1. Store Details</span>
-              {step > 1 && <i className="fa-solid fa-check"></i>}
-            </div>
-
-            <div style={{ width: '20px', height: '2px', background: '#cbd5e1' }}></div>
-
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '6px 14px', borderRadius: '20px',
-              background: step === 2 ? '#0f766e' : '#f1f5f9',
-              color: step === 2 ? '#fff' : '#64748b',
-              fontSize: '0.78rem', fontWeight: '700'
-            }}>
-              <i className="fa-solid fa-fingerprint"></i>
-              <span>2. Mandatory Biometrics</span>
-            </div>
+          <div style={{ width: '52px', height: '52px', borderRadius: '12px', background: '#ecfdf5', color: '#0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 12px auto' }}>
+            <i className="fa-solid fa-store"></i>
           </div>
+          <h1 style={{ fontSize: '1.65rem', fontWeight: '800', color: 'var(--seller-primary, #0f172a)', margin: 0 }}>
+            Register Merchant Store
+          </h1>
+          <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '6px' }}>
+            Sell your products on NovaKart. Fast registration with progressive KYC verification.
+          </p>
         </div>
 
+        {/* Stepper Indicators */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: '15px', left: '15%', right: '15%', height: '2px', background: '#e2e8f0', zIndex: 0 }}>
+            <div style={{ width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%', height: '100%', background: '#0f766e', transition: 'width 0.3s ease' }}></div>
+          </div>
+
+          {[
+            { num: 1, label: 'Identity' },
+            { num: 2, label: 'Store & Address' },
+            { num: 3, label: 'Security' }
+          ].map((s) => (
+            <div key={s.num} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1 }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: currentStep >= s.num ? '#0f766e' : '#f1f5f9',
+                color: currentStep >= s.num ? '#ffffff' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.85rem',
+                fontWeight: '800',
+                border: currentStep === s.num ? '3px solid #99f6e4' : 'none',
+                boxShadow: currentStep === s.num ? '0 0 0 2px #0f766e' : 'none'
+              }}>
+                {currentStep > s.num ? '✓' : s.num}
+              </div>
+              <span style={{ fontSize: '0.72rem', color: currentStep >= s.num ? '#0f766e' : '#94a3b8', fontWeight: '700', marginTop: '4px' }}>
+                {s.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Status Error Banner */}
         {errorMsg && (
-          <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '16px' }}>
-            <i className="fa-solid fa-triangle-exclamation"></i> {errorMsg}
+          <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '16px', lineHeight: '1.4' }}>
+            <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: '6px' }}></i>
+            {errorMsg}
           </div>
         )}
 
-        {/* STEP 1: STORE DETAILS */}
-        {step === 1 && (
-          <form onSubmit={handleProceedToBiometrics} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* STEP 1: STORE & OWNER IDENTITY */}
+        {currentStep === 1 && (
+          <form onSubmit={handleStep1Next} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Store / Business Name</label>
-              <input type="text" className="form-input" placeholder="e.g. Apex Electronics Hub" value={storeName} onChange={(e) => setStoreName(e.target.value)} required />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Store Owner Full Name</label>
-              <input type="text" className="form-input" placeholder="Johnathan Doe" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} required />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Business Email</label>
-                <input type="email" className="form-input" placeholder="store@apex.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Contact Phone</label>
-                <input type="tel" className="form-input" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Password</label>
-              <input type="password" className="form-input" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Physical Store / Warehouse Address</label>
-              <input type="text" className="form-input" placeholder="Warehouse 4, Connaught Place, New Delhi" value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} required />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Store Lat (GPS)</label>
-                <input type="text" className="form-input" value={lat} onChange={(e) => setLat(e.target.value)} required />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Store Lng (GPS)</label>
-                <input type="text" className="form-input" value={lng} onChange={(e) => setLng(e.target.value)} required />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', marginBottom: '14px' }}>
-              <input type="checkbox" id="acceptedTerms" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} required />
-              <label htmlFor="acceptedTerms" style={{ fontSize: '0.85rem', color: '#64748B', cursor: 'pointer' }}>
-                I agree to the <button type="button" onClick={() => setShowTermsModal(true)} style={{ background: 'none', border: 'none', padding: 0, textDecoration: 'underline', color: 'var(--seller-primary)', fontWeight: '600', cursor: 'pointer' }}>Merchant Terms &amp; Conditions</button>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Store Owner Full Name *
               </label>
+              <input
+                type="text"
+                style={inputStyle}
+                placeholder="e.g. Ramesh Kumar"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                autoFocus
+                required
+              />
             </div>
 
-            <button type="submit" className="btn-seller btn-seller-primary" style={{ padding: '12px', justifyContent: 'center', width: '100%', marginTop: '6px', fontSize: '0.9rem', fontWeight: '700' }}>
-              Proceed to Mandatory Biometric Setup (Step 2 of 2) &rarr;
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Store / Business Name *
+              </label>
+              <input
+                type="text"
+                style={inputStyle}
+                placeholder="e.g. Nova Fresh Supermarket"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '8px' }}>
+                Business Facility Type *
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div
+                  onClick={() => setStoreType('retail_store')}
+                  style={{
+                    border: storeType === 'retail_store' ? '2px solid #0f766e' : '1.5px solid #e2e8f0',
+                    background: storeType === 'retail_store' ? '#f0fdf4' : '#ffffff',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                    textAlign: 'center'
+                  }}
+                >
+                  <i className="fa-solid fa-store" style={{ fontSize: '1.2rem', color: storeType === 'retail_store' ? '#0f766e' : '#64748b', display: 'block', marginBottom: '4px' }}></i>
+                  <strong style={{ fontSize: '0.82rem', color: '#0f172a', display: 'block' }}>Physical Store</strong>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Showroom / Market</span>
+                </div>
+
+                <div
+                  onClick={() => setStoreType('home_business')}
+                  style={{
+                    border: storeType === 'home_business' ? '2px solid #0f766e' : '1.5px solid #e2e8f0',
+                    background: storeType === 'home_business' ? '#f0fdf4' : '#ffffff',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                    textAlign: 'center'
+                  }}
+                >
+                  <i className="fa-solid fa-house" style={{ fontSize: '1.2rem', color: storeType === 'home_business' ? '#0f766e' : '#64748b', display: 'block', marginBottom: '4px' }}></i>
+                  <strong style={{ fontSize: '0.82rem', color: '#0f172a', display: 'block' }}>Home Business</strong>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Kitchen / Studio</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn-seller btn-seller-primary"
+              style={{ padding: '12px', justifyContent: 'center', width: '100%', fontSize: '0.9rem', fontWeight: '800', marginTop: '8px' }}
+            >
+              Continue to Contact Details →
             </button>
           </form>
         )}
 
-        {/* STEP 2: MANDATORY BIOMETRICS */}
-        {step === 2 && (
-          <form onSubmit={handleFinalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <i className="fa-solid fa-fingerprint" style={{ color: '#16a34a', fontSize: '1.2rem' }}></i>
-                <div>
-                  <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#166534' }}>
-                    Mandatory Biometrics Required
-                  </span>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#15803d' }}>
-                    Register 2 face scans &amp; up to 3 fingerprints to complete merchant store enrollment.
-                  </p>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#166534' }}>
-                Faces: {facesCount}/2 &bull; Fingerprints: {fingerprintsCount}/3
-              </div>
+        {/* STEP 2: CONTACT & ADDRESS */}
+        {currentStep === 2 && (
+          <form onSubmit={handleStep2Next} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Business Email Address *
+              </label>
+              <input
+                type="email"
+                style={inputStyle}
+                placeholder="storeowner@merchant.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+                required
+              />
             </div>
 
-            {/* SECTION A: 2 FACES */}
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', background: '#ffffff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <i className="fa-solid fa-camera" style={{ color: '#0f766e' }}></i>
-                  A. 2 Mandatory Face Scans
-                </h4>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveFaceIndex(0)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      fontSize: '0.72rem',
-                      fontWeight: '700',
-                      border: activeFaceIndex === 0 ? '2px solid #0f766e' : '1px solid #cbd5e1',
-                      background: activeFaceIndex === 0 ? '#ccfbf1' : '#fff',
-                      color: activeFaceIndex === 0 ? '#0f766e' : '#475569',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Face 1 (Frontal) {faces[0]?.photo && '✓'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveFaceIndex(1)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      fontSize: '0.72rem',
-                      fontWeight: '700',
-                      border: activeFaceIndex === 1 ? '2px solid #0f766e' : '1px solid #cbd5e1',
-                      background: activeFaceIndex === 1 ? '#ccfbf1' : '#fff',
-                      color: activeFaceIndex === 1 ? '#0f766e' : '#475569',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Face 2 (Angle) {faces[1]?.photo && '✓'}
-                  </button>
-                </div>
-              </div>
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Mobile Contact Number *
+              </label>
+              <input
+                type="tel"
+                style={inputStyle}
+                placeholder="+91 98765 43210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+            </div>
 
-              {/* Camera Stream Box */}
-              <div style={{
-                position: 'relative',
-                background: '#090d16',
-                borderRadius: '10px',
-                height: '200px',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '12px',
-                border: '2px solid #1e293b'
-              }}>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    transform: 'scaleX(-1)'
-                  }}
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Business / Warehouse Address *
+              </label>
+              <textarea
+                style={{ ...inputStyle, minHeight: '64px', resize: 'vertical' }}
+                placeholder="Shop No., Street, Landmark, Area"
+                value={businessAddress}
+                onChange={(e) => setBusinessAddress(e.target.value)}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>City *</label>
+                <input
+                  type="text"
+                  style={inputStyle}
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  required
                 />
-                <canvas ref={canvasRef} style={{ display: 'none' }} />
-
-                {/* Reticle HUD */}
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <div style={{
-                    width: '130px',
-                    height: '160px',
-                    borderRadius: '50%',
-                    border: '2px dashed rgba(16, 185, 129, 0.75)',
-                    boxShadow: '0 0 12px rgba(16, 185, 129, 0.25)'
-                  }}></div>
-
-                  <div style={{
-                    position: 'absolute',
-                    top: '8px',
-                    background: 'rgba(15, 23, 42, 0.75)',
-                    padding: '3px 8px',
-                    borderRadius: '12px',
-                    fontSize: '0.68rem',
-                    color: '#10B981',
-                    fontWeight: '700'
-                  }}>
-                    SCANNING: {activeFaceIndex === 0 ? 'FACE 1 (FRONTAL KYC)' : 'FACE 2 (ANGLE/TILT KYC)'}
-                  </div>
-                </div>
-
-                {cameraLoading && (
-                  <div style={{ position: 'absolute', color: '#fff', fontSize: '0.8rem' }}>
-                    <i className="fa-solid fa-spinner fa-spin"></i> Initializing camera...
-                  </div>
-                )}
               </div>
-
-              {/* Capture Button */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => captureFace(activeFaceIndex)}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
-                    color: '#ffffff',
-                    border: 'none',
-                    fontWeight: '700',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <i className="fa-solid fa-camera"></i>
-                  Capture {activeFaceIndex === 0 ? 'Face 1 (Frontal)' : 'Face 2 (Angle)'}
-                </button>
-              </div>
-
-              {/* Face Previews */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {faces.map((f, i) => (
-                  <div
-                    key={f.id}
-                    onClick={() => setActiveFaceIndex(i)}
-                    style={{
-                      border: activeFaceIndex === i ? '2px solid #0f766e' : '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '8px',
-                      background: f.photo ? '#f0fdf4' : '#f8fafc',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px'
-                    }}
-                  >
-                    <div style={{
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '6px',
-                      background: '#e2e8f0',
-                      overflow: 'hidden',
-                      flexShrink: 0
-                    }}>
-                      {f.photo ? (
-                        <img src={f.photo} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>
-                          <i className="fa-regular fa-image"></i>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {i === 0 ? 'Face 1 (Frontal)' : 'Face 2 (Angle)'}
-                      </p>
-                      <span style={{ fontSize: '0.68rem', fontWeight: '700', color: f.photo ? '#16a34a' : '#94a3b8' }}>
-                        {f.photo ? '✓ Enrolled' : '○ Pending'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>Pincode *</label>
+                <input
+                  type="text"
+                  style={inputStyle}
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  required
+                />
               </div>
             </div>
 
-            {/* SECTION B: UP TO 3 FINGERPRINTS */}
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', background: '#ffffff' }}>
-              <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <i className="fa-solid fa-fingerprint" style={{ color: '#0f766e' }}></i>
-                B. Register up to 3 Fingerprints (Minimum 1 Required)
-              </h4>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {fingerprints.map((fp, i) => (
-                  <div
-                    key={fp.id}
-                    style={{
-                      border: fp.enrolled ? '1px solid #86efac' : '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '10px 14px',
-                      background: fp.enrolled ? '#f0fdf4' : '#f8fafc',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{
-                        width: '34px',
-                        height: '34px',
-                        borderRadius: '8px',
-                        background: fp.enrolled ? '#dcfce7' : '#e2e8f0',
-                        color: fp.enrolled ? '#16a34a' : '#64748b',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.95rem'
-                      }}>
-                        <i className={`fa-solid ${fp.enrolled ? 'fa-fingerprint' : 'fa-hand-pointer'}`}></i>
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: '700', fontSize: '0.82rem', color: '#0f172a' }}>
-                            {fp.name}
-                          </span>
-                          <span style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#475569', padding: '1px 6px', borderRadius: '4px' }}>
-                            {fp.fingerType}
-                          </span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.7rem', color: fp.enrolled ? '#15803d' : '#94a3b8' }}>
-                          {fp.enrolled ? '✓ Registered' : 'Not registered'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      {scanningFpIndex === i ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <div style={{ width: '70px', height: '6px', borderRadius: '3px', background: '#e2e8f0', overflow: 'hidden' }}>
-                            <div style={{ width: `${fpScanProgress}%`, height: '100%', background: '#10B981', transition: 'width 0.2s' }}></div>
-                          </div>
-                          <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '700' }}>Scanning...</span>
-                        </div>
-                      ) : fp.enrolled ? (
-                        <button
-                          type="button"
-                          onClick={() => handleScanFingerprint(i)}
-                          style={{
-                            background: 'none',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '3px 8px',
-                            fontSize: '0.7rem',
-                            color: '#64748b',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Re-scan
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleScanFingerprint(i)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            background: '#0f172a',
-                            color: '#ffffff',
-                            border: 'none',
-                            fontSize: '0.75rem',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <i className="fa-solid fa-fingerprint" style={{ color: '#10B981' }}></i>
-                          Scan &amp; Enroll
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Step 2 Action Buttons */}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
               <button
                 type="button"
-                onClick={() => setStep(1)}
-                style={{
-                  padding: '12px 18px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
-                  fontWeight: '600',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer'
-                }}
+                onClick={() => setCurrentStep(1)}
+                style={{ padding: '12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', background: '#fff', color: '#475569', fontWeight: '700', cursor: 'pointer', flex: 1 }}
               >
-                &larr; Back
+                ← Back
               </button>
-
               <button
                 type="submit"
                 className="btn-seller btn-seller-primary"
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  justifyContent: 'center',
-                  fontSize: '0.9rem',
-                  fontWeight: '800',
-                  background: biometricsComplete ? 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' : '#cbd5e1',
-                  cursor: biometricsComplete ? 'pointer' : 'not-allowed'
-                }}
-                disabled={loading || !biometricsComplete}
+                style={{ padding: '12px', justifyContent: 'center', flex: 2, fontSize: '0.9rem', fontWeight: '800' }}
               >
-                {loading ? 'Submitting Application & Biometrics...' : 'Register Merchant Store (Complete Verification) 🚀'}
+                Continue to Password →
               </button>
             </div>
           </form>
         )}
 
-        <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.85rem', color: '#64748B' }}>
-          Already approved merchant? <Link to="/login" style={{ color: 'var(--seller-primary)', fontWeight: '700' }}>Sign In</Link>
-        </div>
-      </div>
+        {/* STEP 3: SECURITY & COMPLETE REGISTRATION */}
+        {currentStep === 3 && (
+          <form onSubmit={handleFinalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Account Password *
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  style={{ ...inputStyle, paddingRight: '42px' }}
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                >
+                  <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                </button>
+              </div>
+            </div>
 
-      {/* Terms & Conditions Modal Overlay */}
-      {showTermsModal && (
-        <div className="terms-modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(8px)',
-          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000,
-          padding: '20px', boxSizing: 'border-box'
-        }}>
-          <div className="terms-modal-card" style={{
-            background: '#ffffff', borderRadius: '16px', maxWidth: '640px', width: '100%',
-            maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)', border: '1px solid #e2e8f0',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '20px 24px', borderBottom: '1px solid #e2e8f0',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)', color: '#ffffff'
-            }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800' }}>
-                NovaKart Merchant Partnership Agreement
-              </h3>
-              <button type="button" onClick={() => setShowTermsModal(false)} style={{
-                background: 'none', border: 'none', color: '#ccfbf1', fontSize: '1.5rem',
-                cursor: 'pointer', lineHeight: 1, padding: 0
-              }}>&times;</button>
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Confirm Password *
+              </label>
+              <input
+                type="password"
+                style={inputStyle}
+                placeholder="Re-enter password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
             </div>
-            <div style={{ padding: '24px', overflowY: 'auto', maxHeight: '55vh', fontSize: '0.88rem', lineHeight: '1.6', color: '#334155' }}>
-              <p>Welcome to NovaKart Merchant network! You must provide valid business details, physical warehouse coordinates, owner contact details, and biometric identity verification (2 face scans &amp; up to 3 fingerprints). NovaKart enforces biometric verification for payout security and seller protection.</p>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', fontSize: '0.78rem', color: '#475569', lineHeight: '1.5' }}>
+              <div style={{ fontWeight: '800', color: '#0f172a', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <i className="fa-solid fa-shield-halved" style={{ color: '#0f766e' }}></i> Post-Registration KYC Checklist
+              </div>
+              After registering, you will be guided through:
+              <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                <li>Store premises facade or home production proof</li>
+                <li>Biometric verification (2 Face Scans &amp; Touch Fingerprint)</li>
+                <li>Government ID (Aadhaar / Voter / Passport) &amp; PAN card</li>
+                <li>Product category clearance for customer storefront</li>
+              </ul>
             </div>
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', background: '#f8fafc' }}>
-              <button type="button" onClick={() => { setAcceptedTerms(true); setShowTermsModal(false); }} className="btn btn-seller btn-seller-primary" style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: '700' }}>
-                I Accept Terms &amp; Conditions
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.82rem', color: '#334155', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                style={{ marginTop: '3px' }}
+                required
+              />
+              <span>
+                I agree to the NovaKart Merchant Terms of Service and acknowledge that store products are visible after Admin KYC clearance.
+              </span>
+            </label>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                style={{ padding: '12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', background: '#fff', color: '#475569', fontWeight: '700', cursor: 'pointer', flex: 1 }}
+                disabled={loading}
+              >
+                ← Back
+              </button>
+              <button
+                type="submit"
+                className="btn-seller btn-seller-primary"
+                style={{ padding: '12px', justifyContent: 'center', flex: 2, fontSize: '0.9rem', fontWeight: '800' }}
+                disabled={loading}
+              >
+                {loading ? <><i className="fa-solid fa-spinner fa-spin"></i> Registering...</> : 'Complete Registration 🚀'}
               </button>
             </div>
-          </div>
+          </form>
+        )}
+
+        {/* Footer */}
+        <div style={{ textAlign: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', fontSize: '0.85rem', color: '#64748B' }}>
+          Already have a Merchant Account?{' '}
+          <Link to="/login" style={{ color: 'var(--seller-primary, #0f172a)', fontWeight: '800' }}>
+            Sign In Here
+          </Link>
         </div>
-      )}
+
+      </div>
     </div>
   );
 }

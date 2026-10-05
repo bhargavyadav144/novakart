@@ -18,6 +18,25 @@ export const sendOTP = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide either an email address or mobile phone number.' });
     }
 
+    // Immediate Validation for Seller Portal Login
+    if (purpose === 'login' && (req.body.expectedRole === ROLES.SELLER || req.body.expectedRole === 'seller') && email) {
+      const emailNormalized = email.toLowerCase().trim();
+      const existingUser = await User.findOne({ email: emailNormalized });
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: '⚠️ No registered merchant account found with this email address. Please register your store first.'
+        });
+      }
+      const existingSeller = await Seller.findOne({ userId: existingUser._id });
+      if (!existingSeller) {
+        return res.status(404).json({
+          success: false,
+          message: '⚠️ No Seller store profile found for this email. Please register as a merchant first.'
+        });
+      }
+    }
+
     const otp = generateOTP();
     let sentChannels = [];
     let emailResult = null;
@@ -305,6 +324,7 @@ export const registerSeller = async (req, res, next) => {
       businessAddress,
       lat,
       lng,
+      storeType,
       businessLicenseImage,
       acceptedTerms,
       enrolledFingerprints,
@@ -315,19 +335,8 @@ export const registerSeller = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'You must accept the terms and conditions.' });
     }
 
-    // Mandatory Biometric Security Validation (2 Faces & up to 3 Fingerprints)
-    if (!Array.isArray(enrolledFaces) || enrolledFaces.length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: '🔒 Mandatory Biometric Requirement: You must register exactly 2 face scans (Face 1 Frontal & Face 2 Angle) to onboard as a seller.'
-      });
-    }
-
-    if (!Array.isArray(enrolledFingerprints) || enrolledFingerprints.length < 1) {
-      return res.status(400).json({
-        success: false,
-        message: '🔒 Mandatory Biometric Requirement: You must register your fingerprints (up to 3 fingerprints) to onboard as a seller.'
-      });
+    if (!storeName || !ownerName || !email || !password || !phone) {
+      return res.status(400).json({ success: false, message: 'Please fill in all required registration fields.' });
     }
 
     let user = await User.findOne({ email });
@@ -347,21 +356,25 @@ export const registerSeller = async (req, res, next) => {
       });
     }
 
-    // 2. Create Seller Profile in pending_approval state with registered biometrics
-    const sanitizedFaces = enrolledFaces.slice(0, 2).map((f, i) => ({
+    // 2. Prepare biometrics if provided at registration, or initialize for onboarding
+    const sanitizedFaces = Array.isArray(enrolledFaces) ? enrolledFaces.slice(0, 2).map((f, i) => ({
       id: f.id || `face-${i + 1}`,
       label: f.label || (i === 0 ? 'Primary Frontal Face' : 'Secondary Angle Verification Face'),
       photo: f.photo,
       enrolledAt: new Date()
-    }));
+    })) : [];
 
-    const sanitizedFingerprints = enrolledFingerprints.slice(0, 3).map((fp, i) => ({
+    const sanitizedFingerprints = Array.isArray(enrolledFingerprints) ? enrolledFingerprints.slice(0, 3).map((fp, i) => ({
       id: fp.id || `fp-${i + 1}`,
       name: fp.name || `Fingerprint ${i + 1}`,
       fingerType: fp.fingerType || (i === 0 ? 'Right Thumb' : i === 1 ? 'Right Index' : 'Left Thumb'),
       enrolledAt: new Date(),
       credentialId: fp.credentialId || ''
-    }));
+    })) : [];
+
+    const hasBiometrics = sanitizedFaces.length >= 2 && sanitizedFingerprints.length >= 1;
+    let initialProgress = 15; // Basic store details completed
+    if (hasBiometrics) initialProgress += 20;
 
     const seller = await Seller.create({
       userId: user._id,
@@ -369,16 +382,19 @@ export const registerSeller = async (req, res, next) => {
       ownerName,
       email,
       phone,
-      businessAddress,
+      businessAddress: businessAddress || 'Store Location Pending',
+      storeType: storeType || 'retail_store',
       businessLicenseImage,
       acceptedTerms,
       enrolledFaces: sanitizedFaces,
       enrolledFingerprints: sanitizedFingerprints,
       faceVerificationPhoto: sanitizedFaces[0]?.photo || '',
-      isFaceVerified: true,
-      faceVerifiedAt: new Date(),
-      isBiometricEnrolled: true,
-      biometricsEnrolledAt: new Date(),
+      isFaceVerified: hasBiometrics,
+      faceVerifiedAt: hasBiometrics ? new Date() : null,
+      isBiometricEnrolled: hasBiometrics,
+      biometricsEnrolledAt: hasBiometrics ? new Date() : null,
+      verificationProgress: initialProgress,
+      verificationStatus: 'under_review',
       location: {
         lat: parseFloat(lat) || 28.6139,
         lng: parseFloat(lng) || 77.2090,
@@ -394,7 +410,7 @@ export const registerSeller = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Seller registration submitted with biometric verification. Awaiting administrator KYC approval.',
+      message: 'Seller registration submitted successfully. Please complete your store verification steps.',
       token,
       user: {
         id: user._id,
@@ -403,9 +419,11 @@ export const registerSeller = async (req, res, next) => {
         role: user.role,
         sellerId: seller._id,
         storeName: seller.storeName,
+        storeType: seller.storeType,
         status: seller.status,
         isApproved: seller.isApproved,
-        isBiometricEnrolled: true,
+        isBiometricEnrolled: seller.isBiometricEnrolled,
+        verificationProgress: seller.verificationProgress,
         enrolledFacesCount: sanitizedFaces.length,
         enrolledFingerprintsCount: sanitizedFingerprints.length
       }
